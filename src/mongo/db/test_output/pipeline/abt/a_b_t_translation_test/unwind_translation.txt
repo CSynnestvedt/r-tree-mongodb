@@ -1,0 +1,165 @@
+==== VARIATION: basic $unwind ====
+-- INPUTS:
+pipeline: [{$unwind: {path: '$a.b.c'}}]
+metadata: 
+	number of partitions: 1
+	scan definitions: 
+		collection: 
+			options: 
+			distribution and paths: 
+				distribution type: Centralized
+				distribution paths: 
+			indexes: 
+			collection exists: 1
+			CE type: -1
+
+-- OUTPUT:
+Root []
+|   |   projections: 
+|   |       embedProj_0
+|   RefBlock: 
+|       Variable [embedProj_0]
+Evaluation [{embedProj_0}]
+|   EvalPath []
+|   |   Variable [scan_0]
+|   PathField [a]
+|   PathTraverse [inf]
+|   PathField [b]
+|   PathTraverse [inf]
+|   PathField [c]
+|   PathConstant []
+|   Variable [unwoundProj_0]
+Unwind []
+Evaluation [{unwoundProj_0}]
+|   EvalPath []
+|   |   Variable [scan_0]
+|   PathGet [a]
+|   PathGet [b]
+|   PathGet [c]
+|   PathIdentity []
+Scan [collection, {scan_0}]
+
+
+==== VARIATION: complex $unwind ====
+-- INPUTS:
+pipeline: [{$unwind: {path: '$a.b.c', includeArrayIndex: 'p1.pid', preserveNullAndEmptyArrays: true}}]
+metadata: 
+	number of partitions: 1
+	scan definitions: 
+		collection: 
+			options: 
+			distribution and paths: 
+				distribution type: Centralized
+				distribution paths: 
+			indexes: 
+			collection exists: 1
+			CE type: -1
+
+-- OUTPUT:
+Root []
+|   |   projections: 
+|   |       embedPidProj_0
+|   RefBlock: 
+|       Variable [embedPidProj_0]
+Evaluation [{embedPidProj_0}]
+|   EvalPath []
+|   |   Variable [embedProj_0]
+|   PathField [p1]
+|   PathField [pid]
+|   PathConstant []
+|   If []
+|   |   |   Const [null]
+|   |   Variable [unwoundPid_0]
+|   BinaryOp [Gte]
+|   |   Const [0]
+|   Variable [unwoundPid_0]
+Evaluation [{embedProj_0}]
+|   EvalPath []
+|   |   Variable [scan_0]
+|   PathField [a]
+|   PathTraverse [inf]
+|   PathField [b]
+|   PathTraverse [inf]
+|   PathField [c]
+|   PathLambda []
+|   LambdaAbstraction [unwoundLambdaVarName_0]
+|   If []
+|   |   |   Variable [unwoundLambdaVarName_0]
+|   |   Variable [unwoundProj_0]
+|   BinaryOp [Gte]
+|   |   Const [0]
+|   Variable [unwoundPid_0]
+Unwind [retainNonArrays]
+Evaluation [{unwoundProj_0}]
+|   EvalPath []
+|   |   Variable [scan_0]
+|   PathGet [a]
+|   PathGet [b]
+|   PathGet [c]
+|   PathIdentity []
+Scan [collection, {scan_0}]
+
+
+==== VARIATION: $unwind with $group ====
+-- INPUTS:
+pipeline: [{$unwind:{path: '$a.b', preserveNullAndEmptyArrays: true}}, {$group:{_id: '$a.b'}}]
+metadata: 
+	number of partitions: 1
+	scan definitions: 
+		collection: 
+			options: 
+			distribution and paths: 
+				distribution type: Centralized
+				distribution paths: 
+			indexes: 
+			collection exists: 1
+			CE type: -1
+
+-- OUTPUT:
+Root []
+|   |   projections: 
+|   |       agg_project_0
+|   RefBlock: 
+|       Variable [agg_project_0]
+Evaluation [{agg_project_0}]
+|   EvalPath []
+|   |   Const [{}]
+|   PathField [_id]
+|   PathConstant []
+|   Variable [groupByProj_0]
+GroupBy []
+|   |   groupings: 
+|   |       RefBlock: 
+|   |           Variable [groupByProj_0]
+|   aggregations: 
+Evaluation [{groupByProj_0}]
+|   EvalPath []
+|   |   Variable [embedProj_0]
+|   PathGet [a]
+|   PathTraverse [inf]
+|   PathGet [b]
+|   PathIdentity []
+Evaluation [{embedProj_0}]
+|   EvalPath []
+|   |   Variable [scan_0]
+|   PathField [a]
+|   PathTraverse [inf]
+|   PathField [b]
+|   PathLambda []
+|   LambdaAbstraction [unwoundLambdaVarName_0]
+|   If []
+|   |   |   Variable [unwoundLambdaVarName_0]
+|   |   Variable [unwoundProj_0]
+|   BinaryOp [Gte]
+|   |   Const [0]
+|   Variable [unwoundPid_0]
+Unwind [retainNonArrays]
+Evaluation [{unwoundProj_0}]
+|   EvalPath []
+|   |   Variable [scan_0]
+|   PathGet [a]
+|   PathGet [b]
+|   PathIdentity []
+Scan [collection, {scan_0}]
+
+
