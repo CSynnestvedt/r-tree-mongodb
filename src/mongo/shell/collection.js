@@ -219,6 +219,38 @@ DBCollection.prototype._massageObject = function(q) {
     throw Error("don't know how to massage : " + type);
 };
 
+//Register geometry
+DBCollection.prototype.registerGeometry = function(opt) {
+    var options = opt || {};
+    var cmd = { registerGeometry: 1};
+    cmd.collectionName = this.getName();
+
+    if (options.field != undefined)
+        cmd.field = options.field;
+
+    if (options.gtype != undefined)
+        cmd.gtype = options.gtype;
+    else
+        cmd.gtype = 1;
+    if (options.torrance != undefined)
+        cmd.torrance = options.torrance;
+    else
+        cmd.torrance = 0.00001;
+    if (options.srid != undefined)
+        cmd.srid = options.srid;
+    else
+        cmd.srid = 4326;
+    if (options.crstype != undefined)
+        cmd.crstype = options.crstype;
+    else
+        cmd.crstype = 0;
+
+    var res = this._db.runCommand(cmd);
+
+    assert(res, "no result from registerGeometry result");
+    return res;
+}
+
 DBCollection.prototype.find = function(filter, projection, limit, skip, batchSize, options) {
     // Verify that API version parameters are not supplied via the shell helper.
     assert.noAPIParams(options);
