@@ -219,7 +219,8 @@ DBCollection.prototype._massageObject = function(q) {
     throw Error("don't know how to massage : " + type);
 };
 
-//Register geometry
+// Register geometry
+// CUSTOM CODE HERE ***
 DBCollection.prototype.registerGeometry = function(opt) {
     var options = opt || {};
     var cmd = { registerGeometry: 1};
