@@ -257,3 +257,8 @@ dist-test/
 # node extra stuff (for someone installing eslint)
 node_modules/
 package-lock.json
+*.out
+*.app
+
+build/
+__pycache__
