@@ -33,6 +33,7 @@
 #include <tuple>
 #include <vector>
 
+#include "mongo/client/connpool.h"
 #include "mongo/db/auth/authorization_session_impl.h"
 #include "mongo/db/catalog/coll_mod.h"
 #include "mongo/db/coll_mod_gen.h"
@@ -53,6 +54,8 @@
 #include "mongo/s/catalog/sharding_catalog_client.h"
 #include "mongo/s/catalog/type_chunk.h"
 #include "mongo/s/catalog/type_collection.h"
+#include "mongo/s/catalog/type_geometadata.h"
+#include "mongo/s/catalog/type_indexmetadata.h"
 #include "mongo/s/catalog/type_config_version.h"
 #include "mongo/s/catalog/type_namespace_placement_gen.h"
 #include "mongo/s/catalog/type_shard.h"
@@ -379,6 +382,16 @@ Status ShardingCatalogManager::initializeConfigDatabaseIfNeeded(OperationContext
         return status;
     }
 
+    status = _initRTreeCollections(opCtx);
+    if (!status.isOK()) {
+        return status;
+    }
+
+    status = _initMetaDataCollections(opCtx);
+    if (!status.isOK()) {
+        return status;
+    }
+
     stdx::lock_guard<Latch> lk(_mutex);
     _configInitialized = true;
 
@@ -498,6 +511,205 @@ Status ShardingCatalogManager::_initConfigCollections(OperationContext* opCtx) {
     }
     return Status::OK();
 }
+
+/**
+ * Ensure that config.meta_geom exists upon configsvr startup
+ */
+Status ShardingCatalogManager::_initMetaDataCollections(OperationContext* opCtx) {
+    // Ensure that config.collections exist so that snapshot reads on it don't fail with
+    // SnapshotUnavailable error when it is implicitly created (when sharding a
+    // collection for the first time) but not in yet in the committed snapshot).
+    DBDirectClient client(opCtx);
+
+    BSONObj cmd = BSON("create" << IndexMetaData::ConfigNS.coll());
+    BSONObj result;
+    const bool ok = client.runCommand(IndexMetaData::ConfigNS.dbName(), cmd, result);
+    if (!ok) {  // create returns error NamespaceExists if collection already exists
+        Status status = getStatusFromCommandResult(result);
+        if (status != ErrorCodes::NamespaceExists) {
+            return status.withContext("Could not create config.collections");
+        }
+    }
+    return Status::OK();
+}
+
+/**
+ * Ensure that config.meta_rtee exists upon configsvr startup
+ */
+Status ShardingCatalogManager::_initRTreeCollections(OperationContext* opCtx) {
+    // Ensure that config.collections exist so that snapshot reads on it don't fail with
+    // SnapshotUnavailable error when it is implicitly created (when sharding a
+    // collection for the first time) but not in yet in the committed snapshot).
+    DBDirectClient client(opCtx);
+
+    BSONObj cmd = BSON("create" << GeoMetaData::ConfigNS.coll());
+    BSONObj result;
+    const bool ok = client.runCommand(GeoMetaData::ConfigNS.dbName(), cmd, result);
+    if (!ok) {  // create returns error NamespaceExists if collection already exists
+        Status status = getStatusFromCommandResult(result);
+        if (status != ErrorCodes::NamespaceExists) {
+            return status.withContext("Could not create config.collections");
+        }
+    }
+    return Status::OK();
+}
+
+void ShardingCatalogManager::registerGeometry(OperationContext* opCtx,BSONObj bdr)
+{
+    DBDirectClient client(opCtx);
+    BSONObj cmd = BSON("insert" << GeoMetaData::ConfigNS.coll() << "documents" << bdr);
+    BSONObj result;
+    const bool ok = client.runCommand(GeoMetaData::ConfigNS.dbName(), cmd, result);
+    this->_currGeoMeta.datanamespace = bdr["datanamespace"].str();
+    this->_currGeoMeta.column_name = bdr["column_name"].str();
+    this->_currGeoMeta.gtype = bdr["gtype"].Int();
+    this->_currGeoMeta.index_type = bdr["index_type"].Int();
+    this->_currGeoMeta.srid = bdr["srid"].Int();
+    this->_currGeoMeta.crs_type = bdr["crs_type"].Int();
+    this->_currGeoMeta.tolerance = bdr["tolerance"].Double();
+    this->_currGeoMeta.index_info = bdr["index_info"].OID();
+
+}
+
+BSONObj ShardingCatalogManager::getGeometry(OperationContext* opCtx,BSONObj query)
+{
+    if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["NAMESPACE"].str())
+    {
+        return this->_currGeoMeta.toBson();
+    }
+    else
+    {
+        DBDirectClient client(opCtx);
+        BSONObj Geo = client.findOne(GeoMetaData::ConfigNS, query);
+        if (!Geo.isEmpty())
+        {
+            this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
+            this->_currGeoMeta.column_name = Geo["column_name"].str();
+            this->_currGeoMeta.gtype = Geo["gtype"].Int();
+            this->_currGeoMeta.index_type = Geo["index_type"].Int();
+            this->_currGeoMeta.srid = Geo["srid"].Int();
+            this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
+            this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
+            this->_currGeoMeta.index_info = Geo["index_info"].OID();
+        }
+        return Geo;
+    }
+}
+
+void  ShardingCatalogManager::updateGeometry(OperationContext* opCtx,BSONObj query, BSONObj obj)
+{
+    // ScopedDbConnection conn(Grid::get(opCtx)->shardRegistry()->getConfigServerConnectionString());
+    DBDirectClient client(opCtx);
+    auto update = BSON("q" << query << "u" << obj << "upsert" << false << "multi" << false);
+    BSONObj cmd = BSON("update" << GeoMetaData::ConfigNS.coll() << "updates" << BSON_ARRAY(update));
+    BSONObj result;
+    const bool ok = client.runCommand(GeoMetaData::ConfigNS.dbName(), cmd, result);
+
+    BSONObj Geo = client.findOne(GeoMetaData::ConfigNS, query);
+    if (!Geo.isEmpty())
+    {
+        this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
+        this->_currGeoMeta.column_name = Geo["column_name"].str();
+        this->_currGeoMeta.gtype = Geo["gtype"].Int();
+        this->_currGeoMeta.index_type = Geo["index_type"].Int();
+        this->_currGeoMeta.srid = Geo["srid"].Int();
+        this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
+        this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
+        this->_currGeoMeta.index_info = Geo["index_info"].OID();
+    }
+}
+
+void ShardingCatalogManager::deleteGeometry(OperationContext* opCtx,BSONObj query)
+{
+    write_ops::DeleteCommandRequest deleteOp(GeoMetaData::ConfigNS);
+    deleteOp.setDeletes({[&] {
+        write_ops::DeleteOpEntry entry;
+        entry.setQ(query);
+        entry.setMulti(false);
+        return entry;
+    }()});
+    DBDirectClient client(opCtx);
+    client.remove(deleteOp);
+    if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["datanamespace"].str())
+    {
+        this->_currGeoMeta.datanamespace ="";
+        this->_currGeoMeta.column_name ="";
+        this->_currGeoMeta.gtype = 0;
+        this->_currGeoMeta.index_type = 0;
+        this->_currGeoMeta.srid = 0;
+        this->_currGeoMeta.crs_type = 0;
+        this->_currGeoMeta.tolerance = 0;
+        this->_currGeoMeta.index_info = OID("000000000000000000000000");
+    }
+}
+
+bool ShardingCatalogManager::checkGeoExist(OperationContext* opCtx,BSONObj bdr)
+{
+    if (bdr.hasField("datanamespace") && _currGeoMeta.datanamespace == bdr["datanamespace"].str())
+    {
+        return true;
+    }
+    DBDirectClient client(opCtx);
+    BSONObj Geo = client.findOne(GeoMetaData::ConfigNS, bdr);
+    
+    return !Geo.isEmpty();
+}
+
+bool ShardingCatalogManager::checkRtreeExist(OperationContext* opCtx,BSONObj bdr)
+{
+    if (bdr.hasField("datanamespace") && _currGeoMeta.datanamespace == bdr["datanamespace"].str())
+    {
+        return _currGeoMeta.index_type != 0 ? true : false;
+    }
+
+    DBDirectClient client(opCtx);
+    BSONObj Geo = client.findOne(GeoMetaData::ConfigNS, bdr);
+
+    if (Geo.isEmpty())
+        return false;
+    else
+        return Geo["index_type"].Int() != 0 ? true : false;
+}
+
+void ShardingCatalogManager::insertIndexMetadata(OperationContext* opCtx,BSONObj bdr)
+{
+    DBDirectClient client(opCtx);
+    BSONObj cmd = BSON("insert" << IndexMetaData::ConfigNS.coll() << "documents" << bdr);
+    BSONObj result;
+    const bool ok = client.runCommand(IndexMetaData::ConfigNS.dbName(), cmd, result);
+}
+
+BSONObj ShardingCatalogManager::getIndexMetadata(OperationContext* opCtx,BSONObj query)
+{
+    DBDirectClient client(opCtx);
+    BSONObj index = client.findOne(IndexMetaData::ConfigNS, query);
+    return index;
+}
+
+void ShardingCatalogManager::updateIndexMetadata(OperationContext* opCtx,BSONObj query, BSONObj obj)
+{
+    DBDirectClient client(opCtx);
+    auto update = BSON("q" << query << "u" << obj << "upsert" << false << "multi" << false);
+    BSONObj cmd = BSON("update" << IndexMetaData::ConfigNS.coll() << "updates" << BSON_ARRAY(update));
+    BSONObj result;
+    const bool ok = client.runCommand(IndexMetaData::ConfigNS.dbName(), cmd, result);
+}
+
+void ShardingCatalogManager::deleteIndexMetadata(OperationContext* opCtx,BSONObj query)
+{
+    write_ops::DeleteCommandRequest deleteOp(IndexMetaData::ConfigNS);
+    deleteOp.setDeletes({[&] {
+        write_ops::DeleteOpEntry entry;
+        entry.setQ(query);
+        entry.setMulti(false);
+        return entry;
+    }()});
+    DBDirectClient client(opCtx);
+    client.remove(deleteOp);
+}
+
+
+
 
 Status ShardingCatalogManager::_initConfigSettings(OperationContext* opCtx) {
     DBDirectClient client(opCtx);

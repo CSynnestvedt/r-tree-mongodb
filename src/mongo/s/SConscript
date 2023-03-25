@@ -183,6 +183,8 @@ env.Library(
         'catalog/type_changelog.cpp',
         'catalog/type_chunk_base.idl',
         'catalog/type_chunk.cpp',
+        'catalog/type_indexmetadata.cpp',
+        'catalog/type_geometadata.cpp',
         'catalog/type_collection.cpp',
         'catalog/type_collection.idl',
         'catalog/type_config_version.cpp',

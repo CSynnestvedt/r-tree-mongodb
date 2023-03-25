@@ -76,8 +76,8 @@ BSONObj IndexMetaData::toConfigBSON() const {
         _maxnode = maxnode;
     };
 
-      void IndexMetaData::setMaxNode(const int& maxnode){
-        _maxnode = maxnode;
+      void IndexMetaData::setMaxLeaf(const int& maxleaf){
+        _maxleaf = maxleaf;
     };
 
     void IndexMetaData::setRootKey(const OID& root_key) {

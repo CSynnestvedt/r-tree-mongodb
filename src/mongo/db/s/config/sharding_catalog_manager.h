@@ -588,6 +588,40 @@ private:
     Status _initConfigCollections(OperationContext* opCtx);
 
     /**
+     * Ensure that config.meta_geom exists upon configsvr startup
+     */
+    Status _initMetaDataCollections(OperationContext* opCtx);
+
+    /**
+     * Ensure that config.meta_rtree exists upon configsvr startup
+     */
+    Status _initRTreeCollections(OperationContext* opCtx);
+
+    	/**
+	*metadata oprations.
+	*/
+	//insert geometry metadata
+	void registerGeometry(OperationContext* txn,BSONObj bdr);
+	//get geometry metadata
+	BSONObj getGeometry(OperationContext* txn,BSONObj query);
+	//update geometry metadata
+	void  updateGeometry(OperationContext* txn,BSONObj query, BSONObj obj);
+	//delete geometry metadata
+	void deleteGeometry(OperationContext* txn,BSONObj query);
+	//check whether geometry metadata related to given field exist
+	bool checkGeoExist(OperationContext* txn,BSONObj bdr);
+	//check whether R-tree related to given field exist
+	bool checkRtreeExist(OperationContext* txn,BSONObj bdr);
+	//insert index metadata
+	void insertIndexMetadata(OperationContext* txn,BSONObj bdr);
+	//get index metadata
+	BSONObj getIndexMetadata(OperationContext* txn,BSONObj query);
+	//update index metadata
+	void updateIndexMetadata(OperationContext* txn, BSONObj query,BSONObj obj);
+	//delete index metadata
+	void deleteIndexMetadata(OperationContext* txn,BSONObj query);
+
+    /**
      * Used during addShard to determine if there is already an existing shard that matches the
      * shard that is currently being added.  An OK return with boost::none indicates that there
      * is no conflicting shard, and we can proceed trying to add the new shard.  An OK return
@@ -822,6 +856,46 @@ private:
      * taking this.
      */
     Lock::ResourceMutex _kZoneOpLock;
+
+
+    /**
+    *The two new structs can store the datas of the BSONObj we get from
+    *The GeoMetaDataNS and IndexMetaDataNS.
+    *Store the information so we don't have to connect the database everytime
+    */
+    struct GMetaData{
+        std::string datanamespace;
+        std::string column_name;
+        int index_type;
+        OID index_info;
+        int gtype;
+        int srid;
+        int crs_type;
+        double tolerance;
+
+        BSONObj toBson()
+        {
+            BSONObjBuilder bdr;
+            bdr.append("datanamespace", datanamespace);
+            bdr.append("column_name", column_name);
+            bdr.append("index_type", index_type);
+            bdr.append("index_info", index_info);
+            bdr.append("gtype", gtype);
+            bdr.append("srid", srid);
+            bdr.append("crs_type", srid);
+            bdr.append("tolerance", tolerance);
+            return bdr.obj();
+        }
+    };
+
+    struct RtreeMetaData{
+        int maxnode;
+        int maxleaf;
+        OID root_key;
+    };
+
+    GMetaData _currGeoMeta;
+    RtreeMetaData _currIndexMeta;
 };
 
 }  // namespace mongo
