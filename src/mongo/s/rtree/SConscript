@@ -3,7 +3,7 @@
 Import("env")
 
 env.Library(
-    target='rtree',
+    target='rtreeindex',
     source=[
         'transaction.cpp',
         'rtree_data_structure.cpp',
@@ -21,7 +21,11 @@ env.Library(
 
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/db/commands/killcursors_cmd',
-    ],
+     '$BUILD_DIR/mongo/client',
+     '$BUILD_DIR/mongo/db',
+     '$BUILD_DIR/mongo/db/commands',
+     '$BUILD_DIR/mongo/s/coreshard',
+     '$BUILD_DIR/mongo/s/mongoscore',
+    ]
 )
 
