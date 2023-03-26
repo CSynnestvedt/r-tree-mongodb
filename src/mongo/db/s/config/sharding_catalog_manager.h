@@ -565,6 +565,30 @@ public:
      */
     ShardingCatalogClient* localCatalogClient();
 
+    	/**
+	*metadata oprations.
+	*/
+	//insert geometry metadata
+	void registerGeometry(OperationContext* txn,BSONObj bdr);
+	//get geometry metadata
+	BSONObj getGeometry(OperationContext* txn,BSONObj query);
+	//update geometry metadata
+	void  updateGeometry(OperationContext* txn,BSONObj query, BSONObj obj);
+	//delete geometry metadata
+	void deleteGeometry(OperationContext* txn,BSONObj query);
+	//check whether geometry metadata related to given field exist
+	bool checkGeoExist(OperationContext* txn,BSONObj bdr);
+	//check whether R-tree related to given field exist
+	bool checkRtreeExist(OperationContext* txn,BSONObj bdr);
+	//insert index metadata
+	void insertIndexMetadata(OperationContext* txn,BSONObj bdr);
+	//get index metadata
+	BSONObj getIndexMetadata(OperationContext* txn,BSONObj query);
+	//update index metadata
+	void updateIndexMetadata(OperationContext* txn, BSONObj query,BSONObj obj);
+	//delete index metadata
+	void deleteIndexMetadata(OperationContext* txn,BSONObj query);
+
 private:
     /**
      * Performs the necessary checks for version compatibility and creates a new config.version
@@ -597,29 +621,7 @@ private:
      */
     Status _initRTreeCollections(OperationContext* opCtx);
 
-    	/**
-	*metadata oprations.
-	*/
-	//insert geometry metadata
-	void registerGeometry(OperationContext* txn,BSONObj bdr);
-	//get geometry metadata
-	BSONObj getGeometry(OperationContext* txn,BSONObj query);
-	//update geometry metadata
-	void  updateGeometry(OperationContext* txn,BSONObj query, BSONObj obj);
-	//delete geometry metadata
-	void deleteGeometry(OperationContext* txn,BSONObj query);
-	//check whether geometry metadata related to given field exist
-	bool checkGeoExist(OperationContext* txn,BSONObj bdr);
-	//check whether R-tree related to given field exist
-	bool checkRtreeExist(OperationContext* txn,BSONObj bdr);
-	//insert index metadata
-	void insertIndexMetadata(OperationContext* txn,BSONObj bdr);
-	//get index metadata
-	BSONObj getIndexMetadata(OperationContext* txn,BSONObj query);
-	//update index metadata
-	void updateIndexMetadata(OperationContext* txn, BSONObj query,BSONObj obj);
-	//delete index metadata
-	void deleteIndexMetadata(OperationContext* txn,BSONObj query);
+    
 
     /**
      * Used during addShard to determine if there is already an existing shard that matches the

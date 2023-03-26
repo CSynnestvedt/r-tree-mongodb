@@ -13,6 +13,7 @@ env.SConscript(
     dirs=[
         'catalog',
         'client',
+        'rtree'
         'commands',
         'query',
         'write_ops',
