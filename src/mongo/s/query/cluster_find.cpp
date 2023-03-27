@@ -249,7 +249,7 @@ namespace mongo
                 NumHostsTargetedMetrics::QueryType::kFindCmd, targetType);
         }
 
-        StatusWith<CursorId> runQueryWithoutRetrying(OperationContext *txn,
+        StatusWith<CursorId> runQueryWithoutRetrying(OperationContext *opCtx,
                                                      const char *ns,
                                                      BSONObj &jsobj,
                                                      BSONObjBuilder &anObjBuilder,
@@ -275,10 +275,10 @@ namespace mongo
 
             BSONObjBuilder bdr;
             bdr.append("NAMESPACE", dbname + "." + collName);
-            auto database_status = grid.catalogCache()->getDatabase(txn, dbname);
+            auto database_status = grid.catalogCache()->getDatabase(opCtx, dbname);
             uassertStatusOK(database_status.getStatus());
             std::shared_ptr<DBConfig> conf = database_status.getValue();
-            BSONObj geometadata = conf->getGeometry(txn, bdr.obj());
+            BSONObj geometadata = conf->getGeometry(opCtx, bdr.obj());
             columnName = geometadata["COLUMN_NAME"].str();
             BSONElement geowithincomm;
             BSONObj geometry;
@@ -347,7 +347,7 @@ namespace mongo
              */
             if (is_registered && is_command_geowithin)
             {
-                auto ccc = RTreeRangeClusterClientCursorImpl::make(txn, dbname, collName, query_condition, 1);
+                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1);
                 //--------------------------------------------------------------------------
                 auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
                 int bytesBuffered = 0;
@@ -388,15 +388,16 @@ namespace mongo
                 const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
                 const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
                 std::string nss_str = dbname + "." + jsobj.firstElement().String();
+                auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
                 StringData da(nss_str);
                 NamespaceString nss(da);
                 return cursorManager->registerCursor(
-                    ccc.releaseCursor(), nss, cursorType, cursorLifetime);
+                    opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
                 //--------------------------------------------------------------------------
             }
             if (is_registered && is_command_geointersects)
             {
-                auto ccc = RTreeRangeClusterClientCursorImpl::make(txn, dbname, collName, query_condition, 0);
+                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 0);
                 //--------------------------------------------------------------------------
                 auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
                 int bytesBuffered = 0;
@@ -437,10 +438,11 @@ namespace mongo
                 const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
                 const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
                 std::string nss_str = dbname + "." + jsobj.firstElement().String();
+                auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
                 StringData da(nss_str);
                 NamespaceString nss(da);
                 return cursorManager->registerCursor(
-                    ccc.releaseCursor(), nss, cursorType, cursorLifetime);
+                    opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
                 //--------------------------------------------------------------------------
             }
             else if (is_registered && is_command_geonear && is_type_point)
@@ -452,7 +454,7 @@ namespace mongo
                 //  cout<<endl<<endl<<coords.jsonString();
                 vector<BSONElement> vv;
                 coords.elems(vv);
-                auto ccc = RTreeNearClusterClientCursorImpl::make(txn,
+                auto ccc = RTreeNearClusterClientCursorImpl::make(opCtx,
                                                                   dbname,
                                                                   collName,
                                                                   vv[0].Number(),
@@ -499,14 +501,15 @@ namespace mongo
                 const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
                 const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
                 std::string nss_str = dbname + "." + jsobj.firstElement().String();
+                auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
                 StringData da(nss_str);
                 NamespaceString nss(da);
                 return cursorManager->registerCursor(
-                    ccc.releaseCursor(), nss, cursorType, cursorLifetime);
+                    opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
                 //--------------------------------------------------------------------------
             }
 
-            auto ccc = RTreeRangeClusterClientCursorImpl::make(txn, dbname, collName, query_condition, 1);
+            auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1);
             //--------------------------------------------------------------------------
             auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
             int bytesBuffered = 0;
@@ -546,11 +549,12 @@ namespace mongo
             auto cursorManager = grid.getCursorManager();
             const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
             const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
+            auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
             std::string nss_str = dbname + "." + jsobj.firstElement().String();
             StringData da(nss_str);
             NamespaceString nss(da);
             return cursorManager->registerCursor(
-                ccc.releaseCursor(), nss, cursorType, cursorLifetime);
+                opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
             //--------------------------------------------------------------------------
         }
 
