@@ -37,229 +37,275 @@
 #include "mongo/s/query/router_stage_remove_metadata_fields.h"
 #include "mongo/s/query/router_stage_skip.h"
 
-namespace mongo {
+namespace mongo
+{
 
-static CounterMetric mongosCursorStatsTotalOpened("mongos.cursor.totalOpened");
-static CounterMetric mongosCursorStatsMoreThanOneBatch("mongos.cursor.moreThanOneBatch");
+    static CounterMetric mongosCursorStatsTotalOpened("mongos.cursor.totalOpened");
+    static CounterMetric mongosCursorStatsMoreThanOneBatch("mongos.cursor.moreThanOneBatch");
 
-ClusterClientCursorGuard ClusterClientCursorImpl::make(
-    OperationContext* opCtx,
-    std::shared_ptr<executor::TaskExecutor> executor,
-    ClusterClientCursorParams&& params) {
-    std::unique_ptr<ClusterClientCursor> cursor(new ClusterClientCursorImpl(
-        opCtx, std::move(executor), std::move(params), opCtx->getLogicalSessionId()));
-    return ClusterClientCursorGuard(opCtx, std::move(cursor));
-}
-
-ClusterClientCursorGuard ClusterClientCursorImpl::make(OperationContext* opCtx,
-                                                       std::unique_ptr<RouterExecStage> root,
-                                                       ClusterClientCursorParams&& params) {
-    std::unique_ptr<ClusterClientCursor> cursor(new ClusterClientCursorImpl(
-        opCtx, std::move(root), std::move(params), opCtx->getLogicalSessionId()));
-    return ClusterClientCursorGuard(opCtx, std::move(cursor));
-}
-
-ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext* opCtx,
-                                                 std::shared_ptr<executor::TaskExecutor> executor,
-                                                 ClusterClientCursorParams&& params,
-                                                 boost::optional<LogicalSessionId> lsid)
-    : _params(std::move(params)),
-      _root(buildMergerPlan(opCtx, std::move(executor), &_params)),
-      _lsid(lsid),
-      _opCtx(opCtx),
-      _createdDate(opCtx->getServiceContext()->getPreciseClockSource()->now()),
-      _lastUseDate(_createdDate),
-      _queryHash(CurOp::get(opCtx)->debug().queryHash) {
-    dassert(!_params.compareWholeSortKeyOnRouter ||
-            SimpleBSONObjComparator::kInstance.evaluate(
-                _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
-    mongosCursorStatsTotalOpened.increment();
-}
-
-ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext* opCtx,
-                                                 std::unique_ptr<RouterExecStage> root,
-                                                 ClusterClientCursorParams&& params,
-                                                 boost::optional<LogicalSessionId> lsid)
-    : _params(std::move(params)),
-      _root(std::move(root)),
-      _lsid(lsid),
-      _opCtx(opCtx),
-      _createdDate(opCtx->getServiceContext()->getPreciseClockSource()->now()),
-      _lastUseDate(_createdDate),
-      _queryHash(CurOp::get(opCtx)->debug().queryHash) {
-    dassert(!_params.compareWholeSortKeyOnRouter ||
-            SimpleBSONObjComparator::kInstance.evaluate(
-                _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
-    mongosCursorStatsTotalOpened.increment();
-}
-
-ClusterClientCursorImpl::~ClusterClientCursorImpl() {
-    if (_nBatchesReturned > 1)
-        mongosCursorStatsMoreThanOneBatch.increment();
-}
-
-StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next() {
-    invariant(_opCtx);
-    const auto interruptStatus = _opCtx->checkForInterruptNoAssert();
-    if (!interruptStatus.isOK()) {
-        _maxTimeMSExpired |= (interruptStatus.code() == ErrorCodes::MaxTimeMSExpired);
-        return interruptStatus;
+    ClusterClientCursorGuard ClusterClientCursorImpl::make(
+        OperationContext *opCtx,
+        std::shared_ptr<executor::TaskExecutor> executor,
+        ClusterClientCursorParams &&params)
+    {
+        std::unique_ptr<ClusterClientCursor> cursor(new ClusterClientCursorImpl(
+            opCtx, std::move(executor), std::move(params), opCtx->getLogicalSessionId()));
+        return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
-    // First return stashed results, if there are any.
-    if (!_stash.empty()) {
-        auto front = std::move(_stash.front());
-        _stash.pop();
-        ++_numReturnedSoFar;
-        return {front};
+    ClusterClientCursorGuard ClusterClientCursorImpl::make(OperationContext *opCtx,
+                                                           std::unique_ptr<RouterExecStage> root,
+                                                           ClusterClientCursorParams &&params)
+    {
+        std::unique_ptr<ClusterClientCursor> cursor(new ClusterClientCursorImpl(
+            opCtx, std::move(root), std::move(params), opCtx->getLogicalSessionId()));
+        return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
-    auto next = _root->next();
-    if (next.isOK() && !next.getValue().isEOF()) {
-        ++_numReturnedSoFar;
-    }
-    // Record if we just got a MaxTimeMSExpired error.
-    _maxTimeMSExpired |= (next.getStatus().code() == ErrorCodes::MaxTimeMSExpired);
-    return next;
-}
-
-void ClusterClientCursorImpl::kill(OperationContext* opCtx) {
-    _root->kill(opCtx);
-}
-
-void ClusterClientCursorImpl::reattachToOperationContext(OperationContext* opCtx) {
-    _opCtx = opCtx;
-    _root->reattachToOperationContext(opCtx);
-}
-
-void ClusterClientCursorImpl::detachFromOperationContext() {
-    _opCtx = nullptr;
-    _root->detachFromOperationContext();
-}
-
-OperationContext* ClusterClientCursorImpl::getCurrentOperationContext() const {
-    return _opCtx;
-}
-
-bool ClusterClientCursorImpl::isTailable() const {
-    return _params.tailableMode != TailableModeEnum::kNormal;
-}
-
-bool ClusterClientCursorImpl::isTailableAndAwaitData() const {
-    return _params.tailableMode == TailableModeEnum::kTailableAndAwaitData;
-}
-
-BSONObj ClusterClientCursorImpl::getOriginatingCommand() const {
-    return _params.originatingCommandObj;
-}
-
-const PrivilegeVector& ClusterClientCursorImpl::getOriginatingPrivileges() const& {
-    return _params.originatingPrivileges;
-}
-
-bool ClusterClientCursorImpl::partialResultsReturned() const {
-    // We may have timed out in this layer, or within the plan tree waiting for results from shards.
-    return (_maxTimeMSExpired && _params.isAllowPartialResults) || _root->partialResultsReturned();
-}
-
-std::size_t ClusterClientCursorImpl::getNumRemotes() const {
-    return _root->getNumRemotes();
-}
-
-BSONObj ClusterClientCursorImpl::getPostBatchResumeToken() const {
-    return _root->getPostBatchResumeToken();
-}
-
-long long ClusterClientCursorImpl::getNumReturnedSoFar() const {
-    return _numReturnedSoFar;
-}
-
-void ClusterClientCursorImpl::queueResult(const ClusterQueryResult& result) {
-    auto resultObj = result.getResult();
-    if (resultObj) {
-        invariant(resultObj->isOwned());
-    }
-    _stash.push(result);
-}
-
-bool ClusterClientCursorImpl::remotesExhausted() {
-    return _root->remotesExhausted();
-}
-
-Status ClusterClientCursorImpl::setAwaitDataTimeout(Milliseconds awaitDataTimeout) {
-    return _root->setAwaitDataTimeout(awaitDataTimeout);
-}
-
-boost::optional<LogicalSessionId> ClusterClientCursorImpl::getLsid() const {
-    return _lsid;
-}
-
-boost::optional<TxnNumber> ClusterClientCursorImpl::getTxnNumber() const {
-    return _params.txnNumber;
-}
-
-Date_t ClusterClientCursorImpl::getCreatedDate() const {
-    return _createdDate;
-}
-
-Date_t ClusterClientCursorImpl::getLastUseDate() const {
-    return _lastUseDate;
-}
-
-void ClusterClientCursorImpl::setLastUseDate(Date_t now) {
-    _lastUseDate = std::move(now);
-}
-
-boost::optional<uint32_t> ClusterClientCursorImpl::getQueryHash() const {
-    return _queryHash;
-}
-
-std::uint64_t ClusterClientCursorImpl::getNBatches() const {
-    return _nBatchesReturned;
-}
-
-void ClusterClientCursorImpl::incNBatches() {
-    ++_nBatchesReturned;
-}
-
-APIParameters ClusterClientCursorImpl::getAPIParameters() const {
-    return _params.apiParameters;
-}
-
-boost::optional<ReadPreferenceSetting> ClusterClientCursorImpl::getReadPreference() const {
-    return _params.readPreference;
-}
-
-boost::optional<repl::ReadConcernArgs> ClusterClientCursorImpl::getReadConcern() const {
-    return _params.readConcern;
-}
-
-std::unique_ptr<RouterExecStage> ClusterClientCursorImpl::buildMergerPlan(
-    OperationContext* opCtx,
-    std::shared_ptr<executor::TaskExecutor> executor,
-    ClusterClientCursorParams* params) {
-    const auto skip = params->skipToApplyOnRouter;
-    const auto limit = params->limit;
-
-    std::unique_ptr<RouterExecStage> root =
-        std::make_unique<RouterStageMerge>(opCtx, executor, params->extractARMParams());
-
-    if (skip) {
-        root = std::make_unique<RouterStageSkip>(opCtx, std::move(root), *skip);
+    ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext *opCtx,
+                                                     std::shared_ptr<executor::TaskExecutor> executor,
+                                                     ClusterClientCursorParams &&params,
+                                                     boost::optional<LogicalSessionId> lsid)
+        : _params(std::move(params)),
+          _root(buildMergerPlan(opCtx, std::move(executor), &_params)),
+          _lsid(lsid),
+          _opCtx(opCtx),
+          _createdDate(opCtx->getServiceContext()->getPreciseClockSource()->now()),
+          _lastUseDate(_createdDate),
+          _queryHash(CurOp::get(opCtx)->debug().queryHash)
+    {
+        dassert(!_params.compareWholeSortKeyOnRouter ||
+                SimpleBSONObjComparator::kInstance.evaluate(
+                    _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
+        mongosCursorStatsTotalOpened.increment();
     }
 
-    if (limit) {
-        root = std::make_unique<RouterStageLimit>(opCtx, std::move(root), *limit);
+    ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext *opCtx,
+                                                     std::unique_ptr<RouterExecStage> root,
+                                                     ClusterClientCursorParams &&params,
+                                                     boost::optional<LogicalSessionId> lsid)
+        : _params(std::move(params)),
+          _root(std::move(root)),
+          _lsid(lsid),
+          _opCtx(opCtx),
+          _createdDate(opCtx->getServiceContext()->getPreciseClockSource()->now()),
+          _lastUseDate(_createdDate),
+          _queryHash(CurOp::get(opCtx)->debug().queryHash)
+    {
+        dassert(!_params.compareWholeSortKeyOnRouter ||
+                SimpleBSONObjComparator::kInstance.evaluate(
+                    _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
+        mongosCursorStatsTotalOpened.increment();
     }
 
-    const bool hasSort = !params->sortToApplyOnRouter.isEmpty();
-    if (hasSort) {
-        // Strip out the sort key after sorting.
-        root = std::make_unique<RouterStageRemoveMetadataFields>(
-            opCtx, std::move(root), StringDataSet{AsyncResultsMerger::kSortKeyField});
+    ClusterClientCursorImpl::~ClusterClientCursorImpl()
+    {
+        if (_nBatchesReturned > 1)
+            mongosCursorStatsMoreThanOneBatch.increment();
     }
 
-    return root;
-}
+    StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next()
+    {
+        invariant(_opCtx);
+        const auto interruptStatus = _opCtx->checkForInterruptNoAssert();
+        if (!interruptStatus.isOK())
+        {
+            _maxTimeMSExpired |= (interruptStatus.code() == ErrorCodes::MaxTimeMSExpired);
+            return interruptStatus;
+        }
 
-}  // namespace mongo
+        // First return stashed results, if there are any.
+        if (!_stash.empty())
+        {
+            auto front = std::move(_stash.front());
+            _stash.pop();
+            ++_numReturnedSoFar;
+            return {front};
+        }
+
+        auto next = _root->next();
+        if (next.isOK() && !next.getValue().isEOF())
+        {
+            ++_numReturnedSoFar;
+        }
+        // Record if we just got a MaxTimeMSExpired error.
+        _maxTimeMSExpired |= (next.getStatus().code() == ErrorCodes::MaxTimeMSExpired);
+        return next;
+    }
+
+    void ClusterClientCursorImpl::kill(OperationContext *opCtx)
+    {
+        _root->kill(opCtx);
+    }
+
+    void ClusterClientCursorImpl::reattachToOperationContext(OperationContext *opCtx)
+    {
+        _opCtx = opCtx;
+        _root->reattachToOperationContext(opCtx);
+    }
+
+    void ClusterClientCursorImpl::detachFromOperationContext()
+    {
+        _opCtx = nullptr;
+        _root->detachFromOperationContext();
+    }
+
+    OperationContext *ClusterClientCursorImpl::getCurrentOperationContext() const
+    {
+        return _opCtx;
+    }
+
+    bool ClusterClientCursorImpl::isTailable() const
+    {
+        return _params.tailableMode != TailableModeEnum::kNormal;
+    }
+
+    bool ClusterClientCursorImpl::isTailableAndAwaitData() const
+    {
+        return _params.tailableMode == TailableModeEnum::kTailableAndAwaitData;
+    }
+
+    BSONObj ClusterClientCursorImpl::getOriginatingCommand() const
+    {
+        return _params.originatingCommandObj;
+    }
+
+    const PrivilegeVector &ClusterClientCursorImpl::getOriginatingPrivileges() const &
+    {
+        return _params.originatingPrivileges;
+    }
+
+    bool ClusterClientCursorImpl::partialResultsReturned() const
+    {
+        // We may have timed out in this layer, or within the plan tree waiting for results from shards.
+        return (_maxTimeMSExpired && _params.isAllowPartialResults) || _root->partialResultsReturned();
+    }
+
+    std::size_t ClusterClientCursorImpl::getNumRemotes() const
+    {
+        return _root->getNumRemotes();
+    }
+
+    BSONObj ClusterClientCursorImpl::getPostBatchResumeToken() const
+    {
+        return _root->getPostBatchResumeToken();
+    }
+
+    long long ClusterClientCursorImpl::getNumReturnedSoFar() const
+    {
+        return _numReturnedSoFar;
+    }
+
+    void ClusterClientCursorImpl::queueResult(const ClusterQueryResult &result)
+    {
+        auto resultObj = result.getResult();
+        if (resultObj)
+        {
+            invariant(resultObj->isOwned());
+        }
+        _stash.push(result);
+    }
+
+    void ClusterClientCursorImpl::setExhausted(bool isExhausted)
+    {
+        _isExhausted = isExhausted;
+    }
+
+    bool ClusterClientCursorImpl::remotesExhausted()
+    {
+        return _root->remotesExhausted();
+    }
+
+    Status ClusterClientCursorImpl::setAwaitDataTimeout(Milliseconds awaitDataTimeout)
+    {
+        return _root->setAwaitDataTimeout(awaitDataTimeout);
+    }
+
+    boost::optional<LogicalSessionId> ClusterClientCursorImpl::getLsid() const
+    {
+        return _lsid;
+    }
+
+    boost::optional<TxnNumber> ClusterClientCursorImpl::getTxnNumber() const
+    {
+        return _params.txnNumber;
+    }
+
+    Date_t ClusterClientCursorImpl::getCreatedDate() const
+    {
+        return _createdDate;
+    }
+
+    Date_t ClusterClientCursorImpl::getLastUseDate() const
+    {
+        return _lastUseDate;
+    }
+
+    void ClusterClientCursorImpl::setLastUseDate(Date_t now)
+    {
+        _lastUseDate = std::move(now);
+    }
+
+    boost::optional<uint32_t> ClusterClientCursorImpl::getQueryHash() const
+    {
+        return _queryHash;
+    }
+
+    std::uint64_t ClusterClientCursorImpl::getNBatches() const
+    {
+        return _nBatchesReturned;
+    }
+
+    void ClusterClientCursorImpl::incNBatches()
+    {
+        ++_nBatchesReturned;
+    }
+
+    APIParameters ClusterClientCursorImpl::getAPIParameters() const
+    {
+        return _params.apiParameters;
+    }
+
+    boost::optional<ReadPreferenceSetting> ClusterClientCursorImpl::getReadPreference() const
+    {
+        return _params.readPreference;
+    }
+
+    boost::optional<repl::ReadConcernArgs> ClusterClientCursorImpl::getReadConcern() const
+    {
+        return _params.readConcern;
+    }
+
+    std::unique_ptr<RouterExecStage> ClusterClientCursorImpl::buildMergerPlan(
+        OperationContext *opCtx,
+        std::shared_ptr<executor::TaskExecutor> executor,
+        ClusterClientCursorParams *params)
+    {
+        const auto skip = params->skipToApplyOnRouter;
+        const auto limit = params->limit;
+
+        std::unique_ptr<RouterExecStage> root =
+            std::make_unique<RouterStageMerge>(opCtx, executor, params->extractARMParams());
+
+        if (skip)
+        {
+            root = std::make_unique<RouterStageSkip>(opCtx, std::move(root), *skip);
+        }
+
+        if (limit)
+        {
+            root = std::make_unique<RouterStageLimit>(opCtx, std::move(root), *limit);
+        }
+
+        const bool hasSort = !params->sortToApplyOnRouter.isEmpty();
+        if (hasSort)
+        {
+            // Strip out the sort key after sorting.
+            root = std::make_unique<RouterStageRemoveMetadataFields>(
+                opCtx, std::move(root), StringDataSet{AsyncResultsMerger::kSortKeyField});
+        }
+
+        return root;
+    }
+
+} // namespace mongo

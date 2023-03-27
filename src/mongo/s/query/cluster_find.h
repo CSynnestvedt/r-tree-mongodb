@@ -37,41 +37,53 @@
 #include "mongo/db/query/explain_options.h"
 #include "mongo/db/query/getmore_command_gen.h"
 
-namespace mongo {
+namespace mongo
+{
 
-template <typename T>
-class StatusWith;
-class CanonicalQuery;
-class OperationContext;
-struct ReadPreferenceSetting;
-
-/**
- * Methods for running find and getMore operations across a sharded cluster.
- */
-class ClusterFind {
-public:
-    // The number of times we are willing to re-target and re-run the query after receiving a stale
-    // config, snapshot, or shard not found error.
-    static const size_t kMaxRetries;
+    template <typename T>
+    class StatusWith;
+    class CanonicalQuery;
+    class OperationContext;
+    struct ReadPreferenceSetting;
 
     /**
-     * Runs query 'query', targeting remote hosts according to the read preference in 'readPref'.
-     *
-     * On success, fills out 'results' with the first batch of query results and returns the cursor
-     * id which the caller can use on subsequent getMore operations. If no cursor needed to be saved
-     * (e.g. the cursor was exhausted without need for a getMore), returns a cursor id of 0.
+     * Methods for running find and getMore operations across a sharded cluster.
      */
-    static CursorId runQuery(OperationContext* opCtx,
-                             const CanonicalQuery& query,
-                             const ReadPreferenceSetting& readPref,
-                             std::vector<BSONObj>* results,
-                             bool* partialResultsReturned = nullptr);
+    class ClusterFind
+    {
+    public:
+        // The number of times we are willing to re-target and re-run the query after receiving a stale
+        // config, snapshot, or shard not found error.
+        static const size_t kMaxRetries;
 
-    /**
-     * Executes the getMore command 'cmd', and on success returns a CursorResponse.
-     */
-    static StatusWith<CursorResponse> runGetMore(OperationContext* opCtx,
-                                                 const GetMoreCommandRequest& cmd);
-};
+        /**
+         * Runs query 'query', targeting remote hosts according to the read preference in 'readPref'.
+         *
+         * On success, fills out 'results' with the first batch of query results and returns the cursor
+         * id which the caller can use on subsequent getMore operations. If no cursor needed to be saved
+         * (e.g. the cursor was exhausted without need for a getMore), returns a cursor id of 0.
+         */
+        static CursorId runQuery(OperationContext *opCtx,
+                                 const CanonicalQuery &query,
+                                 const ReadPreferenceSetting &readPref,
+                                 std::vector<BSONObj> *results,
+                                 bool *partialResultsReturned = nullptr);
 
-}  // namespace mongo
+        /**
+         * Overload a runQuery to handle queries with rtree
+         */
+        static StatusWith<CursorId> runQuery(OperationContext *txn,
+                                             const char *ns,
+                                             BSONObj &jsobj,
+                                             BSONObjBuilder &anObjBuilder,
+                                             int queryOptions,
+                                             std::vector<BSONObj> *results);
+
+        /**
+         * Executes the getMore command 'cmd', and on success returns a CursorResponse.
+         */
+        static StatusWith<CursorResponse> runGetMore(OperationContext *opCtx,
+                                                     const GetMoreCommandRequest &cmd);
+    };
+
+} // namespace mongo

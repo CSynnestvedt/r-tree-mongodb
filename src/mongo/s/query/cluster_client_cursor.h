@@ -41,213 +41,218 @@
 #include "mongo/s/query/router_exec_stage.h"
 #include "mongo/util/time_support.h"
 
-namespace mongo {
+namespace mongo
+{
 
-class OperationContext;
-template <typename T>
-class StatusWith;
-
-/**
- * ClusterClientCursor is used to generate results from cursor-generating commands on one or
- * more remote hosts. A cursor-generating command (e.g. the find command) is one that
- * establishes a ClientCursor and a matching cursor id on the remote host. In order to retrieve
- * all command results, getMores must be issued against each of the remote cursors until they
- * are exhausted.
- *
- * Results are generated using a pipeline of mongoS query execution stages called RouterExecStage.
- *
- * Does not throw exceptions.
- */
-class ClusterClientCursor {
-public:
-    virtual ~ClusterClientCursor(){};
+    class OperationContext;
+    template <typename T>
+    class StatusWith;
 
     /**
-     * Returns the next available result document (along with an ok status). May block waiting
-     * for results from remote nodes.
+     * ClusterClientCursor is used to generate results from cursor-generating commands on one or
+     * more remote hosts. A cursor-generating command (e.g. the find command) is one that
+     * establishes a ClientCursor and a matching cursor id on the remote host. In order to retrieve
+     * all command results, getMores must be issued against each of the remote cursors until they
+     * are exhausted.
      *
-     * If there are no further results, the end of the stream is indicated with an empty
-     * QueryResult and an ok status.
+     * Results are generated using a pipeline of mongoS query execution stages called RouterExecStage.
      *
-     * A non-ok status is returned in case of any error.
+     * Does not throw exceptions.
      */
-    virtual StatusWith<ClusterQueryResult> next() = 0;
+    class ClusterClientCursor
+    {
+    public:
+        virtual ~ClusterClientCursor(){};
 
-    /**
-     * Must be called before destruction to abandon a not-yet-exhausted cursor. If next() has
-     * already returned boost::none, then the cursor is exhausted and is safe to destroy.
-     *
-     * May block waiting for responses from remote hosts.
-     */
-    virtual void kill(OperationContext* opCtx) = 0;
+        /**
+         * Returns the next available result document (along with an ok status). May block waiting
+         * for results from remote nodes.
+         *
+         * If there are no further results, the end of the stream is indicated with an empty
+         * QueryResult and an ok status.
+         *
+         * A non-ok status is returned in case of any error.
+         */
+        virtual StatusWith<ClusterQueryResult> next() = 0;
 
-    /**
-     * Sets the operation context for the cursor.
-     */
-    virtual void reattachToOperationContext(OperationContext* opCtx) = 0;
+        /**
+         * Must be called before destruction to abandon a not-yet-exhausted cursor. If next() has
+         * already returned boost::none, then the cursor is exhausted and is safe to destroy.
+         *
+         * May block waiting for responses from remote hosts.
+         */
+        virtual void kill(OperationContext *opCtx) = 0;
 
-    /**
-     * Detaches the cursor from its current OperationContext. Must be called before the
-     * OperationContext in use is deleted.
-     */
-    virtual void detachFromOperationContext() = 0;
+        /**
+         * Sets the operation context for the cursor.
+         */
+        virtual void reattachToOperationContext(OperationContext *opCtx) = 0;
 
-    /**
-     * Return the current context the cursor is attached to, if any.
-     */
-    virtual OperationContext* getCurrentOperationContext() const = 0;
+        /**
+         * Detaches the cursor from its current OperationContext. Must be called before the
+         * OperationContext in use is deleted.
+         */
+        virtual void detachFromOperationContext() = 0;
 
-    /**
-     * Returns whether or not this cursor is tailable.
-     */
-    virtual bool isTailable() const = 0;
+        /**
+         * Return the current context the cursor is attached to, if any.
+         */
+        virtual OperationContext *getCurrentOperationContext() const = 0;
 
-    /**
-     * Returns whether or not this cursor is tailable and awaitData.
-     */
-    virtual bool isTailableAndAwaitData() const = 0;
+        /**
+         * Returns whether or not this cursor is tailable.
+         */
+        virtual bool isTailable() const = 0;
 
-    /**
-     * Returns the original command object which created this cursor.
-     */
-    virtual BSONObj getOriginatingCommand() const = 0;
+        /**
+         * Returns whether or not this cursor is tailable and awaitData.
+         */
+        virtual bool isTailableAndAwaitData() const = 0;
 
-    /**
-     * Returns the privileges required to run a getMore against this cursor. This is the same as the
-     * set of privileges which would have been required to create the cursor in the first place.
-     */
-    virtual const PrivilegeVector& getOriginatingPrivileges() const& = 0;
-    void getOriginatingPrivileges() && = delete;
+        /**
+         * Returns the original command object which created this cursor.
+         */
+        virtual BSONObj getOriginatingCommand() const = 0;
 
-    /**
-     * Returns true if the cursor was opened with 'allowPartialResults:true' and results are not
-     * available from one or more shards.
-     */
-    virtual bool partialResultsReturned() const = 0;
+        /**
+         * Returns the privileges required to run a getMore against this cursor. This is the same as the
+         * set of privileges which would have been required to create the cursor in the first place.
+         */
+        virtual const PrivilegeVector &getOriginatingPrivileges() const & = 0;
+        void getOriginatingPrivileges() && = delete;
 
-    /**
-     * Returns the number of remote hosts involved in this operation.
-     */
-    virtual std::size_t getNumRemotes() const = 0;
+        /**
+         * Returns true if the cursor was opened with 'allowPartialResults:true' and results are not
+         * available from one or more shards.
+         */
+        virtual bool partialResultsReturned() const = 0;
 
-    /**
-     * Returns the current most-recent resume token for this cursor, or an empty object if this is
-     * not a $changeStream cursor.
-     */
-    virtual BSONObj getPostBatchResumeToken() const = 0;
+        /**
+         * Returns the number of remote hosts involved in this operation.
+         */
+        virtual std::size_t getNumRemotes() const = 0;
 
-    /**
-     * Returns the number of result documents returned so far by this cursor via the next() method.
-     */
-    virtual long long getNumReturnedSoFar() const = 0;
+        /**
+         * Returns the current most-recent resume token for this cursor, or an empty object if this is
+         * not a $changeStream cursor.
+         */
+        virtual BSONObj getPostBatchResumeToken() const = 0;
 
-    /**
-     * Stash the ClusterQueryResult so that it gets returned from the CCC on a later call to
-     * next().
-     *
-     * Queued documents are returned in FIFO order. The queued results are exhausted before
-     * generating further results from the underlying mongos query stages.
-     *
-     * 'obj' must be owned BSON.
-     */
-    virtual void queueResult(const ClusterQueryResult& result) = 0;
+        /**
+         * Returns the number of result documents returned so far by this cursor via the next() method.
+         */
+        virtual long long getNumReturnedSoFar() const = 0;
 
-    /**
-     * Returns whether or not all the remote cursors underlying this cursor have been exhausted.
-     */
-    virtual bool remotesExhausted() = 0;
+        /**
+         * Stash the ClusterQueryResult so that it gets returned from the CCC on a later call to
+         * next().
+         *
+         * Queued documents are returned in FIFO order. The queued results are exhausted before
+         * generating further results from the underlying mongos query stages.
+         *
+         * 'obj' must be owned BSON.
+         */
+        virtual void queueResult(const ClusterQueryResult &result) = 0;
 
-    /**
-     * Sets the maxTimeMS value that the cursor should forward with any internally issued getMore
-     * requests.
-     *
-     * Returns a non-OK status if this cursor type does not support maxTimeMS on getMore (i.e. if
-     * the cursor is not tailable + awaitData).
-     */
-    virtual Status setAwaitDataTimeout(Milliseconds awaitDataTimeout) = 0;
+        /**
+         * Returns whether or not all the remote cursors underlying this cursor have been exhausted.
+         */
+        virtual bool remotesExhausted() = 0;
+        virtual void setExhausted(bool isExhausted) = 0;
 
-    /**
-     * Returns the logical session id for this cursor.
-     */
-    virtual boost::optional<LogicalSessionId> getLsid() const = 0;
+        /**
+         * Sets the maxTimeMS value that the cursor should forward with any internally issued getMore
+         * requests.
+         *
+         * Returns a non-OK status if this cursor type does not support maxTimeMS on getMore (i.e. if
+         * the cursor is not tailable + awaitData).
+         */
+        virtual Status setAwaitDataTimeout(Milliseconds awaitDataTimeout) = 0;
 
-    /**
-     * Returns the transaction number for this cursor.
-     */
-    virtual boost::optional<TxnNumber> getTxnNumber() const = 0;
+        /**
+         * Returns the logical session id for this cursor.
+         */
+        virtual boost::optional<LogicalSessionId> getLsid() const = 0;
 
-    /**
-     * Returns the APIParameters for this cursor.
-     */
-    virtual APIParameters getAPIParameters() const = 0;
+        /**
+         * Returns the transaction number for this cursor.
+         */
+        virtual boost::optional<TxnNumber> getTxnNumber() const = 0;
 
-    /**
-     * Returns the readPreference for this cursor.
-     */
-    virtual boost::optional<ReadPreferenceSetting> getReadPreference() const = 0;
+        /**
+         * Returns the APIParameters for this cursor.
+         */
+        virtual APIParameters getAPIParameters() const = 0;
 
-    /**
-     * Returns the readConcern for this cursor.
-     */
-    virtual boost::optional<repl::ReadConcernArgs> getReadConcern() const = 0;
+        /**
+         * Returns the readPreference for this cursor.
+         */
+        virtual boost::optional<ReadPreferenceSetting> getReadPreference() const = 0;
 
-    /**
-     * Returns the creation date of the cursor.
-     */
-    virtual Date_t getCreatedDate() const = 0;
+        /**
+         * Returns the readConcern for this cursor.
+         */
+        virtual boost::optional<repl::ReadConcernArgs> getReadConcern() const = 0;
 
-    /**
-     * Returns the date the cursor was last used.
-     */
-    virtual Date_t getLastUseDate() const = 0;
+        /**
+         * Returns the creation date of the cursor.
+         */
+        virtual Date_t getCreatedDate() const = 0;
 
-    /**
-     * Set the last use date to the provided time.
-     */
-    virtual void setLastUseDate(Date_t now) = 0;
+        /**
+         * Returns the date the cursor was last used.
+         */
+        virtual Date_t getLastUseDate() const = 0;
 
-    /**
-     * Returns the queryHash of the query.
-     */
-    virtual boost::optional<uint32_t> getQueryHash() const = 0;
+        /**
+         * Set the last use date to the provided time.
+         */
+        virtual void setLastUseDate(Date_t now) = 0;
 
-    /**
-     * Returns the number of batches returned by this cursor.
-     */
-    virtual std::uint64_t getNBatches() const = 0;
+        /**
+         * Returns the queryHash of the query.
+         */
+        virtual boost::optional<uint32_t> getQueryHash() const = 0;
 
-    /**
-     * Increment the number of batches returned so far by one.
-     */
-    virtual void incNBatches() = 0;
+        /**
+         * Returns the number of batches returned by this cursor.
+         */
+        virtual std::uint64_t getNBatches() const = 0;
 
-    //
-    // maxTimeMS support.
-    //
+        /**
+         * Increment the number of batches returned so far by one.
+         */
+        virtual void incNBatches() = 0;
 
-    /**
-     * Returns the amount of time execution time available to this cursor. Only valid at the
-     * beginning of a getMore request, and only really for use by the maxTime tracking code.
-     *
-     * Microseconds::max() == infinity, values less than 1 mean no time left.
-     */
-    Microseconds getLeftoverMaxTimeMicros() const {
-        return _leftoverMaxTimeMicros;
-    }
+        //
+        // maxTimeMS support.
+        //
 
-    /**
-     * Sets the amount of execution time available to this cursor. This is only called when an
-     * operation that uses a cursor is finishing, to update its remaining time.
-     *
-     * Microseconds::max() == infinity, values less than 1 mean no time left.
-     */
-    void setLeftoverMaxTimeMicros(Microseconds leftoverMaxTimeMicros) {
-        _leftoverMaxTimeMicros = leftoverMaxTimeMicros;
-    }
+        /**
+         * Returns the amount of time execution time available to this cursor. Only valid at the
+         * beginning of a getMore request, and only really for use by the maxTime tracking code.
+         *
+         * Microseconds::max() == infinity, values less than 1 mean no time left.
+         */
+        Microseconds getLeftoverMaxTimeMicros() const
+        {
+            return _leftoverMaxTimeMicros;
+        }
 
-private:
-    // Unused maxTime budget for this cursor.
-    Microseconds _leftoverMaxTimeMicros = Microseconds::max();
-};
+        /**
+         * Sets the amount of execution time available to this cursor. This is only called when an
+         * operation that uses a cursor is finishing, to update its remaining time.
+         *
+         * Microseconds::max() == infinity, values less than 1 mean no time left.
+         */
+        void setLeftoverMaxTimeMicros(Microseconds leftoverMaxTimeMicros)
+        {
+            _leftoverMaxTimeMicros = leftoverMaxTimeMicros;
+        }
 
-}  // namespace mongo
+    private:
+        // Unused maxTime budget for this cursor.
+        Microseconds _leftoverMaxTimeMicros = Microseconds::max();
+    };
+
+} // namespace mongo

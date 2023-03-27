@@ -40,146 +40,152 @@
 #include "mongo/s/query/router_exec_stage.h"
 #include "mongo/util/net/hostandport.h"
 
-namespace mongo {
+namespace mongo
+{
 
-class RouterStageMock;
+    class RouterStageMock;
 
-class ClusterClientCursorImpl final : public ClusterClientCursor {
-    ClusterClientCursorImpl(const ClusterClientCursorImpl&) = delete;
-    ClusterClientCursorImpl& operator=(const ClusterClientCursorImpl&) = delete;
+    class ClusterClientCursorImpl final : public ClusterClientCursor
+    {
+        ClusterClientCursorImpl(const ClusterClientCursorImpl &) = delete;
+        ClusterClientCursorImpl &operator=(const ClusterClientCursorImpl &) = delete;
 
-public:
-    /**
-     * Constructs a cluster query plan and CCC from the given parameters whose safe cleanup is
-     * ensured by an RAII object.
-     */
-    static ClusterClientCursorGuard make(OperationContext* opCtx,
-                                         std::shared_ptr<executor::TaskExecutor> executor,
-                                         ClusterClientCursorParams&& params);
+    public:
+        /**
+         * Constructs a cluster query plan and CCC from the given parameters whose safe cleanup is
+         * ensured by an RAII object.
+         */
+        static ClusterClientCursorGuard make(OperationContext *opCtx,
+                                             std::shared_ptr<executor::TaskExecutor> executor,
+                                             ClusterClientCursorParams &&params);
 
-    /**
-     * Constructs a CCC from the given execution tree 'root'. The CCC's safe cleanup is ensured by
-     * an RAII object.
-     */
-    static ClusterClientCursorGuard make(OperationContext* opCtx,
-                                         std::unique_ptr<RouterExecStage> root,
-                                         ClusterClientCursorParams&& params);
+        /**
+         * Constructs a CCC from the given execution tree 'root'. The CCC's safe cleanup is ensured by
+         * an RAII object.
+         */
+        static ClusterClientCursorGuard make(OperationContext *opCtx,
+                                             std::unique_ptr<RouterExecStage> root,
+                                             ClusterClientCursorParams &&params);
 
-    StatusWith<ClusterQueryResult> next() final;
+        StatusWith<ClusterQueryResult> next() final;
 
-    void kill(OperationContext* opCtx) final;
+        void kill(OperationContext *opCtx) final;
 
-    void reattachToOperationContext(OperationContext* opCtx) final;
+        void reattachToOperationContext(OperationContext *opCtx) final;
 
-    void detachFromOperationContext() final;
+        void detachFromOperationContext() final;
 
-    OperationContext* getCurrentOperationContext() const final;
+        OperationContext *getCurrentOperationContext() const final;
 
-    bool isTailable() const final;
+        bool isTailable() const final;
 
-    bool isTailableAndAwaitData() const final;
+        bool isTailableAndAwaitData() const final;
 
-    BSONObj getOriginatingCommand() const final;
+        BSONObj getOriginatingCommand() const final;
 
-    const PrivilegeVector& getOriginatingPrivileges() const& final;
-    void getOriginatingPrivileges() && = delete;
+        const PrivilegeVector &getOriginatingPrivileges() const & final;
+        void getOriginatingPrivileges() && = delete;
 
-    bool partialResultsReturned() const final;
+        bool partialResultsReturned() const final;
 
-    std::size_t getNumRemotes() const final;
+        std::size_t getNumRemotes() const final;
 
-    BSONObj getPostBatchResumeToken() const final;
+        BSONObj getPostBatchResumeToken() const final;
 
-    long long getNumReturnedSoFar() const final;
+        long long getNumReturnedSoFar() const final;
 
-    void queueResult(const ClusterQueryResult& result) final;
+        void queueResult(const ClusterQueryResult &result) final;
 
-    bool remotesExhausted() final;
+        bool remotesExhausted() final;
 
-    Status setAwaitDataTimeout(Milliseconds awaitDataTimeout) final;
+        Status setAwaitDataTimeout(Milliseconds awaitDataTimeout) final;
 
-    boost::optional<LogicalSessionId> getLsid() const final;
+        void setExhausted(bool isExhausted);
 
-    boost::optional<TxnNumber> getTxnNumber() const final;
+        boost::optional<LogicalSessionId> getLsid() const final;
 
-    APIParameters getAPIParameters() const final;
+        boost::optional<TxnNumber> getTxnNumber() const final;
 
-    boost::optional<ReadPreferenceSetting> getReadPreference() const final;
+        APIParameters getAPIParameters() const final;
 
-    boost::optional<repl::ReadConcernArgs> getReadConcern() const final;
+        boost::optional<ReadPreferenceSetting> getReadPreference() const final;
 
-    Date_t getCreatedDate() const final;
+        boost::optional<repl::ReadConcernArgs> getReadConcern() const final;
 
-    Date_t getLastUseDate() const final;
+        Date_t getCreatedDate() const final;
 
-    void setLastUseDate(Date_t now) final;
+        Date_t getLastUseDate() const final;
 
-    boost::optional<uint32_t> getQueryHash() const final;
+        void setLastUseDate(Date_t now) final;
 
-    std::uint64_t getNBatches() const final;
+        boost::optional<uint32_t> getQueryHash() const final;
 
-    void incNBatches() final;
+        std::uint64_t getNBatches() const final;
 
-public:
-    /**
-     * Constructs a CCC whose result set is generated by a mock execution stage.
-     */
-    ClusterClientCursorImpl(OperationContext* opCtx,
-                            std::unique_ptr<RouterExecStage> root,
-                            ClusterClientCursorParams&& params,
-                            boost::optional<LogicalSessionId> lsid);
+        void incNBatches() final;
 
-    /**
-     * Constructs a cluster client cursor.
-     */
-    ClusterClientCursorImpl(OperationContext* opCtx,
-                            std::shared_ptr<executor::TaskExecutor> executor,
-                            ClusterClientCursorParams&& params,
-                            boost::optional<LogicalSessionId> lsid);
+    public:
+        /**
+         * Constructs a CCC whose result set is generated by a mock execution stage.
+         */
+        ClusterClientCursorImpl(OperationContext *opCtx,
+                                std::unique_ptr<RouterExecStage> root,
+                                ClusterClientCursorParams &&params,
+                                boost::optional<LogicalSessionId> lsid);
 
-    ~ClusterClientCursorImpl() final;
+        /**
+         * Constructs a cluster client cursor.
+         */
+        ClusterClientCursorImpl(OperationContext *opCtx,
+                                std::shared_ptr<executor::TaskExecutor> executor,
+                                ClusterClientCursorParams &&params,
+                                boost::optional<LogicalSessionId> lsid);
 
-private:
-    /**
-     * Constructs the pipeline of MergerPlanStages which will be used to answer the query.
-     */
-    std::unique_ptr<RouterExecStage> buildMergerPlan(
-        OperationContext* opCtx,
-        std::shared_ptr<executor::TaskExecutor> executor,
-        ClusterClientCursorParams* params);
+        ~ClusterClientCursorImpl() final;
 
-    ClusterClientCursorParams _params;
+    private:
+        /**
+         * Constructs the pipeline of MergerPlanStages which will be used to answer the query.
+         */
+        std::unique_ptr<RouterExecStage> buildMergerPlan(
+            OperationContext *opCtx,
+            std::shared_ptr<executor::TaskExecutor> executor,
+            ClusterClientCursorParams *params);
 
-    // Number of documents already returned by next().
-    long long _numReturnedSoFar = 0;
+        ClusterClientCursorParams _params;
 
-    // The root stage of the pipeline used to return the result set, merged from the remote nodes.
-    std::unique_ptr<RouterExecStage> _root;
+        bool _isExhausted = false;
 
-    // Stores documents queued by queueResult(). BSONObjs within the stashed results must be owned.
-    std::queue<ClusterQueryResult> _stash;
+        // Number of documents already returned by next().
+        long long _numReturnedSoFar = 0;
 
-    // Stores the logical session id for this cursor.
-    boost::optional<LogicalSessionId> _lsid;
+        // The root stage of the pipeline used to return the result set, merged from the remote nodes.
+        std::unique_ptr<RouterExecStage> _root;
 
-    // The OperationContext that we're executing within. This can be updated if necessary by using
-    // detachFromOperationContext() and reattachToOperationContext().
-    OperationContext* _opCtx = nullptr;
+        // Stores documents queued by queueResult(). BSONObjs within the stashed results must be owned.
+        std::queue<ClusterQueryResult> _stash;
 
-    // The time the cursor was created.
-    Date_t _createdDate;
+        // Stores the logical session id for this cursor.
+        boost::optional<LogicalSessionId> _lsid;
 
-    // The time when the cursor was last unpinned, i.e. the end of the last getMore.
-    Date_t _lastUseDate;
+        // The OperationContext that we're executing within. This can be updated if necessary by using
+        // detachFromOperationContext() and reattachToOperationContext().
+        OperationContext *_opCtx = nullptr;
 
-    // The hash of the query shape to be used for slow query logging;
-    boost::optional<uint32_t> _queryHash;
+        // The time the cursor was created.
+        Date_t _createdDate;
 
-    // The number of batches returned by this cursor.
-    std::uint64_t _nBatchesReturned = 0;
+        // The time when the cursor was last unpinned, i.e. the end of the last getMore.
+        Date_t _lastUseDate;
 
-    // Whether ClusterClientCursor::next() was interrupted due to MaxTimeMSExpired.
-    bool _maxTimeMSExpired = false;
-};
+        // The hash of the query shape to be used for slow query logging;
+        boost::optional<uint32_t> _queryHash;
 
-}  // namespace mongo
+        // The number of batches returned by this cursor.
+        std::uint64_t _nBatchesReturned = 0;
+
+        // Whether ClusterClientCursor::next() was interrupted due to MaxTimeMSExpired.
+        bool _maxTimeMSExpired = false;
+    };
+
+} // namespace mongo
