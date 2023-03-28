@@ -15,10 +15,10 @@
 #ifndef GEOS_GEOM_COORDINATESEQUENCE_H
 #define GEOS_GEOM_COORDINATESEQUENCE_H
 
-#include <geos/export.h>
-#include <geos/inline.h>
+#include "../export.h"
+#include "../inline.h"
 
-#include <geos/geom/Coordinate.h> // for applyCoordinateFilter
+#include "Coordinate.h" // for applyCoordinateFilter
 
 #include <vector>
 #include <iosfwd> // ostream

@@ -20,8 +20,8 @@
 #ifndef GEOS_GEOM_COORDINATELIST_H
 #define GEOS_GEOM_COORDINATELIST_H
 
-#include <geos/export.h>
-#include <geos/geom/Coordinate.h>
+#include "../export.h"
+#include "Coordinate.h"
 
 #include <list>
 #include <ostream> // for operator<<

@@ -20,20 +20,20 @@
 #ifndef GEOS_GEOM_GEOMETRYFACTORY_H
 #define GEOS_GEOM_GEOMETRYFACTORY_H
 
-#include <geos/geom/Geometry.h>
-#include <geos/geom/GeometryCollection.h>
-#include <geos/geom/MultiPoint.h>
-#include <geos/geom/MultiLineString.h>
-#include <geos/geom/MultiPolygon.h>
-#include <geos/geom/PrecisionModel.h>
-#include <geos/export.h>
-#include <geos/inline.h>
-#include <geos/util.h>
+#include "Geometry.h"
+#include "GeometryCollection.h"
+#include "MultiPoint.h"
+#include "MultiLineString.h"
+#include "MultiPolygon.h"
+#include "PrecisionModel.h"
+#include "../export.h"
+#include "../inline.h"
+#include "../util.h"
 
 #include <vector>
 #include <memory>
 #include <cassert>
-#include <geos/util/IllegalArgumentException.h>
+#include "../util/IllegalArgumentException.h"
 
 namespace geos {
 namespace geom {

@@ -15,8 +15,8 @@
 #ifndef GEOS_GEOM_COORDINATEFILTER_H
 #define GEOS_GEOM_COORDINATEFILTER_H
 
-#include <geos/export.h>
-#include <geos/inline.h>
+#include "../export.h"
+#include "../inline.h"
 
 #include <cassert>
 

@@ -16,9 +16,9 @@
 #ifndef GEOS_UTIL_TOPOLOGYEXCEPTION_H
 #define GEOS_UTIL_TOPOLOGYEXCEPTION_H
 
-#include <geos/export.h>
-#include <geos/util/GEOSException.h>
-#include <geos/geom/Coordinate.h> // to be removed when .inl is available
+#include "../export.h"
+#include "GEOSException.h"
+#include "../geom/Coordinate.h" // to be removed when .inl is available
 
 #include <cassert>
 

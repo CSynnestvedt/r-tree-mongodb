@@ -15,10 +15,10 @@
 #ifndef GEOS_GEOM_LOCATION_H
 #define GEOS_GEOM_LOCATION_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <iostream> // for ostream
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 namespace geos {
 namespace geom { // geos::geom

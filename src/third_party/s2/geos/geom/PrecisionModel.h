@@ -20,8 +20,8 @@
 #ifndef GEOS_GEOM_PRECISIONMODEL_H
 #define GEOS_GEOM_PRECISIONMODEL_H
 
-#include <geos/export.h>
-#include <geos/inline.h>
+#include "../export.h"
+#include "../inline.h"
 
 
 #include <string>

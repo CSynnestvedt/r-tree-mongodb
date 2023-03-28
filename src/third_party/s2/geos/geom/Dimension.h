@@ -15,8 +15,8 @@
 #ifndef GEOS_GEOM_DIMENSION_H
 #define GEOS_GEOM_DIMENSION_H
 
-#include <geos/export.h>
-#include <geos/inline.h>
+#include "../export.h"
+#include "../inline.h"
 
 namespace geos {
 namespace geom { // geos::geom

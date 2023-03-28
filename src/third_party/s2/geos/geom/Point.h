@@ -21,14 +21,13 @@
 #ifndef GEOS_GEOS_POINT_H
 #define GEOS_GEOS_POINT_H
 
-#include <geos/export.h>
-#include <geos/geom/Geometry.h> // for inheritance
-#include <geos/geom/CoordinateSequence.h> // for proper use of unique_ptr<>
-#include <geos/geom/FixedSizeCoordinateSequence.h>
-#include <geos/geom/Envelope.h> // for proper use of unique_ptr<>
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
-
-#include <geos/inline.h>
+#include "../export.h"
+#include "Geometry.h" // for inheritance
+#include "CoordinateSequence.h" // for proper use of unique_ptr<>
+#include "FixedSizeCoordinateSequence.h"
+#include "Envelope.h" // for proper use of unique_ptr<>
+#include "Dimension.h" // for Dimension::DimensionType
+#include "../inline.h"
 
 #include <string>
 #include <vector>

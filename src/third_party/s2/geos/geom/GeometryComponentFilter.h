@@ -15,8 +15,8 @@
 #ifndef GEOS_GEOM_GEOMETRYCOMPONENTFILTER_H
 #define GEOS_GEOM_GEOMETRYCOMPONENTFILTER_H
 
-#include <geos/export.h>
-#include <geos/inline.h>
+#include "../inline.h"
+#include "../export.h"
 
 namespace geos {
 namespace geom { // geos::geom

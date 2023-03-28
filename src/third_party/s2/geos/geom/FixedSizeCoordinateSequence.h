@@ -15,10 +15,10 @@
 #ifndef GEOS_GEOM_FIXEDSIZECOORDINATESEQUENCE_H
 #define GEOS_GEOM_FIXEDSIZECOORDINATESEQUENCE_H
 
-#include <geos/geom/Coordinate.h>
-#include <geos/geom/CoordinateFilter.h>
-#include <geos/geom/CoordinateSequence.h>
-#include <geos/util.h>
+#include "Coordinate.h"
+#include "CoordinateFilter.h"
+#include "CoordinateSequence.h"
+#include "../util.h"
 
 #include <algorithm>
 #include <array>

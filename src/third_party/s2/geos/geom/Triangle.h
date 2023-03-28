@@ -15,10 +15,10 @@
 #ifndef GEOS_GEOM_TRIANGLE_H
 #define GEOS_GEOM_TRIANGLE_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <geos/geom/Coordinate.h>
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 namespace geos {
 namespace geom { // geos::geom

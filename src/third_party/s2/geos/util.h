@@ -21,10 +21,10 @@
 #ifndef GEOS_UTIL_H
 #define GEOS_UTIL_H
 
-#include <geos/util/GEOSException.h>
-#include <geos/util/IllegalArgumentException.h>
-#include <geos/util/TopologyException.h>
-#include <geos/util/GeometricShapeFactory.h>
+#include "util/GEOSException.h"
+#include "util/IllegalArgumentException.h"
+#include "util/TopologyException.h"
+#include "util/GeometricShapeFactory.h"
 
 #include <memory>
 #include <type_traits>

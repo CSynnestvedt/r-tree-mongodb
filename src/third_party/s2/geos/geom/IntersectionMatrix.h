@@ -19,13 +19,13 @@
 #ifndef GEOS_GEOM_INTERSECTIONMATRIX_H
 #define GEOS_GEOM_INTERSECTIONMATRIX_H
 
-#include <geos/geom/Location.h>
+#include "Location.h"
 
-#include <geos/export.h>
+#include "../export.h"
 #include <array>
 #include <string>
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 namespace geos {
 namespace geom { // geos::geom

@@ -21,14 +21,14 @@
 #ifndef GEOS_GEOS_MULTIPOLYGON_H
 #define GEOS_GEOS_MULTIPOLYGON_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <string>
 #include <vector>
-#include <geos/geom/GeometryCollection.h> // for inheritance
-#include <geos/geom/Polygon.h> // for inheritance
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
+#include "GeometryCollection.h" // for inheritance
+#include "Polygon.h" // for inheritance
+#include "Dimension.h" // for Dimension::DimensionType
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 // Forward declarations
 namespace geos {

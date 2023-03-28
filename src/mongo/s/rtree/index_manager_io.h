@@ -45,6 +45,7 @@
 #include "mongo/stdx/mutex.h"
 
 
+
 using namespace std;
 using namespace rtree_index;
 using namespace mongo;

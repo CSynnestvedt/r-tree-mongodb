@@ -20,12 +20,12 @@
 #define GEOS_GEOM_COORDINATESEQUENCEFACTORY_H
 
 
-#include <geos/export.h>
+#include "../export.h"
 #include <memory>
 #include <vector>
 
 //#include <geos/geom/Coordinate.h>
-#include <geos/inline.h>
+#include "../inline.h"
 
 // Forward declarations
 namespace geos {

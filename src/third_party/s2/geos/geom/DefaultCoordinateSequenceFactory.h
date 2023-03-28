@@ -15,9 +15,9 @@
 #ifndef GEOS_GEOM_DEFAULTCOORDINATESEQUENCEFACTORY_H
 #define GEOS_GEOM_DEFAULTCOORDINATESEQUENCEFACTORY_H
 
-#include <geos/geom/CoordinateSequenceFactory.h>
-#include <geos/geom/CoordinateArraySequence.h>
-#include <geos/geom/FixedSizeCoordinateSequence.h>
+#include "CoordinateSequenceFactory.h"
+#include "CoordinateArraySequence.h"
+#include "FixedSizeCoordinateSequence.h"
 
 namespace geos {
 namespace geom {

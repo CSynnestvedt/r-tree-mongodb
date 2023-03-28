@@ -21,12 +21,12 @@
 #ifndef GEOS_GEOS_MULTIPOINT_H
 #define GEOS_GEOS_MULTIPOINT_H
 
-#include <geos/export.h>
-#include <geos/geom/GeometryCollection.h> // for inheritance
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
-#include <geos/geom/Point.h> // for covariant return type
+#include "../export.h"
+#include "GeometryCollection.h" // for inheritance
+#include "Dimension.h" // for Dimension::DimensionType
+#include "Point.h" // for covariant return type
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 #include <string>
 #include <vector>

@@ -20,7 +20,7 @@
 #ifndef GEOS_GEOM_HEURISTICOVERLAY_H
 #define GEOS_GEOM_HEURISTICOVERLAY_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <memory> // for unique_ptr
 
 namespace geos {

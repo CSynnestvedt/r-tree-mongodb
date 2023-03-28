@@ -15,9 +15,9 @@
 #ifndef GEOS_GEOM_COORDINATE_H
 #define GEOS_GEOM_COORDINATE_H
 
-#include <geos/export.h>
-#include <geos/constants.h> // for DoubleNotANumber
-#include <geos/inline.h>
+#include "../export.h"
+#include "../constants.h" // for DoubleNotANumber
+#include "../inline.h"
 #include <set>
 #include <stack>
 #include <vector> // for typedefs

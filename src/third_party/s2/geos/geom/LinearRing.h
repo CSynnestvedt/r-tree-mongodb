@@ -20,12 +20,12 @@
 #ifndef GEOS_GEOS_LINEARRING_H
 #define GEOS_GEOS_LINEARRING_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <string>
 #include <vector>
-#include <geos/geom/LineString.h>
+#include "LineString.h"
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 // Forward declarations
 namespace geos {

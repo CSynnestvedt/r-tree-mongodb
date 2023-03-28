@@ -21,15 +21,15 @@
 #ifndef GEOS_GEOM_POLYGON_H
 #define GEOS_GEOM_POLYGON_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <string>
 #include <vector>
-#include <geos/geom/Geometry.h> // for inheritance
-#include <geos/geom/Envelope.h> // for proper use of unique_ptr<>
-#include <geos/geom/LinearRing.h>
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
+#include "Geometry.h" // for inheritance
+#include "Envelope.h" // for proper use of unique_ptr<>
+#include "LinearRing.h"
+#include "Dimension.h" // for Dimension::DimensionType
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 #include <memory> // for unique_ptr
 

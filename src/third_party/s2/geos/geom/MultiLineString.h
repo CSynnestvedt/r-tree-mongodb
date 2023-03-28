@@ -21,15 +21,15 @@
 #ifndef GEOS_GEOS_MULTILINESTRING_H
 #define GEOS_GEOS_MULTILINESTRING_H
 
-#include <geos/export.h>
-#include <geos/geom/GeometryCollection.h> // for inheritance
-#include <geos/geom/Dimension.h>
-#include <geos/geom/LineString.h>
+#include "../export.h"
+#include "GeometryCollection.h"// for inheritance
+#include "Dimension.h"
+#include "LineString.h"
 
 #include <string>
 #include <vector>
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 // Forward declarations
 namespace geos {

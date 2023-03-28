@@ -20,9 +20,9 @@
 #define GEOS_GEOM_ENVELOPE_H
 
 
-#include <geos/export.h>
-#include <geos/inline.h>
-#include <geos/geom/Coordinate.h>
+#include "../export.h"
+#include "../inline.h"
+#include "Coordinate.h"
 
 #include <string>
 #include <vector>

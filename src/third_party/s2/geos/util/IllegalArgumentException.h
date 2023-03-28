@@ -16,10 +16,10 @@
 #ifndef GEOS_UTIL_ILLEGALARGUMENTEXCEPTION_H
 #define GEOS_UTIL_ILLEGALARGUMENTEXCEPTION_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <string>
 
-#include <geos/util/GEOSException.h>
+#include "GEOSException.h"
 
 namespace geos {
 namespace util { // geos::util

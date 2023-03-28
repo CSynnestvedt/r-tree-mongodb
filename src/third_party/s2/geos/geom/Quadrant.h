@@ -21,10 +21,10 @@
 #ifndef GEOS_GEOM_QUADRANT_H
 #define GEOS_GEOM_QUADRANT_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <string>
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 // Forward declarations
 namespace geos {

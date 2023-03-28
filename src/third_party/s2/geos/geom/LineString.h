@@ -21,17 +21,17 @@
 #ifndef GEOS_GEOS_LINESTRING_H
 #define GEOS_GEOS_LINESTRING_H
 
-#include <geos/export.h>
-#include <geos/geom/Geometry.h> // for inheritance
-#include <geos/geom/CoordinateSequence.h> // for proper use of unique_ptr<>
-#include <geos/geom/Envelope.h> // for proper use of unique_ptr<>
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
+#include "../export.h"
+#include "Geometry.h" // for inheritance
+#include "CoordinateSequence.h" // for proper use of unique_ptr<>
+#include "Envelope.h" // for proper use of unique_ptr<>
+#include "Dimension.h" // for Dimension::DimensionType
 
 #include <string>
 #include <vector>
 #include <memory> // for unique_ptr
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 #ifdef _MSC_VER
 #pragma warning(push)

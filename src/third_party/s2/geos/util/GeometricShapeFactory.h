@@ -21,11 +21,11 @@
 #ifndef GEOS_UTIL_GEOMETRICSHAPEFACTORY_H
 #define GEOS_UTIL_GEOMETRICSHAPEFACTORY_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <cassert>
 #include <memory>
 
-#include <geos/geom/Coordinate.h>
+#include "../geom/Coordinate.h"
 
 #ifdef _MSC_VER
 #pragma warning(push)

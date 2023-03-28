@@ -21,12 +21,12 @@
 #ifndef GEOS_GEOM_POSITION_H
 #define GEOS_GEOM_POSITION_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <map>
 #include <vector>
 #include <string>
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 
 namespace geos {

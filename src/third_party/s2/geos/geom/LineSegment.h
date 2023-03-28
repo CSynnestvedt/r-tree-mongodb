@@ -21,10 +21,10 @@
 #ifndef GEOS_GEOM_LINESEGMENT_H
 #define GEOS_GEOM_LINESEGMENT_H
 
-#include <geos/export.h>
-#include <geos/geom/Coordinate.h> // for composition
+#include "../export.h"
+#include "Coordinate.h" // for composition
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 #include <array>
 #include <iostream> // for ostream

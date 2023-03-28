@@ -20,12 +20,12 @@
 #ifndef GEOS_GEOS_GEOMETRYCOLLECTION_H
 #define GEOS_GEOS_GEOMETRYCOLLECTION_H
 
-#include <geos/export.h>
-#include <geos/geom/Geometry.h> // for inheritance
-#include <geos/geom/Envelope.h> // for proper use of unique_ptr<>
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
+#include "../export.h"
+#include "Geometry.h" // for inheritance
+#include "Envelope.h" // for proper use of unique_ptr<>
+#include "Dimension.h" // for Dimension::DimensionType
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 #include <string>
 #include <vector>

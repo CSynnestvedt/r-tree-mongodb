@@ -16,7 +16,7 @@
 #ifndef GEOS_UTIL_GEOSEXCEPTION_H
 #define GEOS_UTIL_GEOSEXCEPTION_H
 
-#include <geos/export.h>
+#include "../export.h"
 #include <stdexcept>
 #include <string>
 

@@ -16,12 +16,12 @@
 #define GEOS_GEOM_COORDINATEARRAYSEQUENCEFACTORY_H
 
 
-#include <geos/export.h>
+#include "../export.h"
 #include <vector>
 
-#include <geos/geom/CoordinateSequenceFactory.h> // for inheritance
+#include "CoordinateSequenceFactory.h"// for inheritance
 
-#include <geos/inline.h>
+#include "../inline.h"
 
 // Forward declarations
 namespace geos {

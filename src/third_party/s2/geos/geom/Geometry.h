@@ -31,12 +31,12 @@
 #endif
 #endif
 
-#include <geos/export.h>
-#include <geos/inline.h>
-#include <geos/geom/Envelope.h>
-#include <geos/geom/Dimension.h> // for Dimension::DimensionType
-#include <geos/geom/GeometryComponentFilter.h> // for inheritance
-#include <geos/geom/IntersectionMatrix.h>
+#include "../export.h"
+#include "../inline.h"
+#include "Envelope.h"
+#include "Dimension.h" // for Dimension::DimensionType
+#include "GeometryComponentFilter.h" // for inheritance
+#include "IntersectionMatrix.h"
 
 #include <algorithm>
 #include <string>
