@@ -45,7 +45,8 @@ namespace rtree_index
 	{
 		bool ok = false;
 		auto nss = NamespaceString(dbname + "." + collname);
-					DBDirectClient dbClient(txn);
+		DBDirectClient dbClient(txn);
+		
 		if (opt == INSERT)
 		{
 			BSONObjBuilder insertObj;

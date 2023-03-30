@@ -79,7 +79,7 @@ namespace index_manager
 		 std::unique_ptr<RTreeRangeQueryCursor> GeoSearchWithin(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry);
 		 bool GeoSearchWithinWithoutRefining(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry, vector<mongo::OID>& results);
          std::unique_ptr<RTreeRangeQueryCursor> GeoSearchIntersects(OperationContext* txn, string DB_NAME, string COLLECTION_NAME, mongo::BSONObj InputGeometry);
-		 std::unique_ptr<RTreeGeoNearCurosr> GeoSearchNear(OperationContext* txn, string DB_NAME,string COLLECTION_NAME,double ctx,double cty,double rMin,double rMax);
+		 std::unique_ptr<RTreeGeoNearCursor> GeoSearchNear(OperationContext* txn, string DB_NAME,string COLLECTION_NAME,double ctx,double cty,double rMin,double rMax);
 		 bool InitalizeManager(MongoIndexManagerIO *USER_INDEXMANAGER_IO,MongoIO *USER_RTREE_IO);
 	private:
 		 MongoIndexManagerIO *IO;

@@ -297,7 +297,7 @@ namespace index_manager
 	}
 	
 	
-	std::unique_ptr<RTreeGeoNearCurosr> IndexManagerBase::GeoSearchNear(OperationContext* txn, string DB_NAME,string COLLECTION_NAME,double ctx,double cty,double rMin,double rMax)
+	std::unique_ptr<RTreeGeoNearCursor> IndexManagerBase::GeoSearchNear(OperationContext* txn, string DB_NAME,string COLLECTION_NAME,double ctx,double cty,double rMin,double rMax)
 	{
 		vector < mongo::OID >  ResultKeys;
 		vector<bool> lazyIntersects;
@@ -317,13 +317,13 @@ namespace index_manager
 					_RIO->Configure(DB_NAME,COLLECTION_NAME,Max_Node,Max_Leaf);
 					Node rootNode = _RIO->Basic_Find_One_Node(RootKey);
 					GeoNearSearchNode *RootN = new GeoNearSearchNode(0,9999999,111,rootNode);
-					std::unique_ptr<RTreeGeoNearCurosr> TestCursor(new RTreeGeoNearCurosr(Max_Node, RootN, _RIO, IO, ctx, cty, rMin, rMax,DB_NAME,COLLECTION_NAME,cn));
+					std::unique_ptr<RTreeGeoNearCursor> TestCursor(new RTreeGeoNearCursor(Max_Node, RootN, _RIO, IO, ctx, cty, rMin, rMax,DB_NAME,COLLECTION_NAME,cn));
 					TestCursor->InitCursor();
 					return std::move(TestCursor);
 				}
 			}
 		}
-		std::unique_ptr<RTreeGeoNearCurosr> returnCursor;
+		std::unique_ptr<RTreeGeoNearCursor> returnCursor;
 		return returnCursor;	
 	}
 	

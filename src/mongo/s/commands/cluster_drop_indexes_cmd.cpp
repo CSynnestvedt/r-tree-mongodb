@@ -32,11 +32,16 @@
 
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/s/config/sharding_catalog_manager.h"
 #include "mongo/logv2/log.h"
 #include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/s/cluster_commands_helpers.h"
+
 #include "mongo/s/grid.h"
+
 #include "mongo/s/request_types/sharded_ddl_commands_gen.h"
+
+#include "mongo/s/rtree/rtree_globle.h"
 
 #define MONGO_LOGV2_DEFAULT_COMPONENT ::mongo::logv2::LogComponent::kCommand
 
@@ -118,6 +123,32 @@ public:
                     "CMD: dropIndexes",
                     "namespace"_attr = nss,
                     "command"_attr = redact(cmdObj));
+        
+
+
+        bool is_rtree = false;
+        //auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+        auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName.db());
+        uassertStatusOK(status.getStatus());
+        auto conf = ShardingCatalogManager::get(opCtx);
+
+        BSONObjBuilder bdr;
+        bdr.append("datanamespace", dbName.db()+"."+cmdObj["deleteIndexes"].str());
+        BSONObj query = bdr.obj();
+        // log() << "inma " <<query;
+        std::string columnname =std::string(cmdObj["index"].Obj().firstElement().fieldName());
+        std::string meta = conf->getGeometry(opCtx, query)["column_name"].str();
+        // log() << columnname <<"      caooooooo";
+        // log() << meta ;
+        is_rtree = (meta == columnname) && (conf->checkRtreeExist(opCtx, query));
+        // log() << "cao" << is_rtree ;
+        
+        //only  dropIndexes/deleteIndexes
+        if (is_rtree)
+        {
+            std::string errmsg;
+            return deleteRtreeIndex(opCtx, dbName.db() ,cmdObj, errmsg,output);
+        }
 
         ShardsvrDropIndexes shardsvrDropIndexCmd(nss);
         shardsvrDropIndexCmd.setDropIndexesRequest(requestParser.request().getDropIndexesRequest());
@@ -143,6 +174,42 @@ public:
 
     const AuthorizationContract* getAuthorizationContract() const final {
         return &::mongo::DropIndexes::kAuthorizationContract;
+    }
+
+        bool deleteRtreeIndex(OperationContext* opCtx,
+                                const std::string& dbName,
+                                const BSONObj& cmdObj,
+                                std::string& errmsg,
+                                BSONObjBuilder& output){
+
+        std::string collectionname;
+        if(cmdObj.hasField("deleteIndexes"))                            
+            collectionname = cmdObj["deleteIndexes"].str();
+        else if(cmdObj.hasField("dropIndexes"))
+            collectionname = cmdObj["dropIndexes"].str();
+        else 
+        {
+            errmsg = "it is not a dropIndex command";
+            return false;
+        }
+
+        int stat=0;
+        try {
+            stat = IM.DropIndex(opCtx,dbName, collectionname);
+        }
+        catch (DBException& e) {
+            stat = -1;
+            int code = e.code();
+
+            std::stringstream ss;
+            ss << "exception: " << e.what();
+            errmsg = ss.str();
+            output.append("code", code);
+        }
+        if (1 != stat)
+            errmsg = "The rtree index does not exist.";
+        bool ok = (stat == 1) ? true : false;
+        return ok;                      
     }
 } dropIndexesCmd;
 

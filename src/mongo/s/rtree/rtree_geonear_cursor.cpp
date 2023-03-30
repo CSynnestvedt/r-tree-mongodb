@@ -205,7 +205,7 @@ namespace rtree_index
 	}
 
     //don't use this constructurer;
-	rtree_index::RTreeGeoNearCurosr::RTreeGeoNearCurosr()
+	rtree_index::RTreeGeoNearCursor::RTreeGeoNearCursor()
 	{
 			_closestBarrel.clear();
 			_max_node = 32;
@@ -214,7 +214,7 @@ namespace rtree_index
 			_DataIO = NULL;
 	}
 
-	rtree_index::RTreeGeoNearCurosr::RTreeGeoNearCurosr(int Max_Node, GeoNearSearchNode *RootNode, MongoIO *IO, MongoIndexManagerIO *DataIO, double ctx, double cty, double minDistance, double maxDistance, string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME)
+	rtree_index::RTreeGeoNearCursor::RTreeGeoNearCursor(int Max_Node, GeoNearSearchNode *RootNode, MongoIO *IO, MongoIndexManagerIO *DataIO, double ctx, double cty, double minDistance, double maxDistance, string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME)
 	{
 			_closestBarrel.clear();
 			_minDistance = minDistance;
@@ -267,7 +267,7 @@ namespace rtree_index
 	 *  form the _root_node level to the level-0w
 	 *	
 	 */
-	vector<GeoNearSearchNode *> rtree_index::RTreeGeoNearCurosr::GetNNCInLevel(vector<GeoNearSearchNode *> NNCInUpperLevel, int Level)
+	vector<GeoNearSearchNode *> rtree_index::RTreeGeoNearCursor::GetNNCInLevel(vector<GeoNearSearchNode *> NNCInUpperLevel, int Level)
 	{
 
 			vector<GeoNearSearchNode * > returnNNCInLevel;
@@ -324,7 +324,7 @@ namespace rtree_index
 	}
 
 	
-	bool rtree_index::RTreeGeoNearCurosr::ExpendSingleNode(GeoNearSearchNode *Node2Expend)
+	bool rtree_index::RTreeGeoNearCursor::ExpendSingleNode(GeoNearSearchNode *Node2Expend)
 	{
 			if (Node2Expend != NULL && Node2Expend->data.Level > 0)// It's a tree node rather then a data node
 			{
@@ -353,14 +353,14 @@ namespace rtree_index
 			return false;
 		}
 
-	void rtree_index::RTreeGeoNearCurosr::CalculateDistances(GeoNearSearchNode * node2Calculate, MBR m)
+	void rtree_index::RTreeGeoNearCursor::CalculateDistances(GeoNearSearchNode * node2Calculate, MBR m)
 	{
 			node2Calculate->minDistance = _MinDistanceFromMBR(_ctx, _cty, m);
 			node2Calculate->maxDistance = _MaxDistanceFromMBR(_ctx, _cty, m);
 		}
 
 	
-	bool rtree_index::RTreeGeoNearCurosr::DeleteNode(GeoNearSearchNode * node2Delete)
+	bool rtree_index::RTreeGeoNearCursor::DeleteNode(GeoNearSearchNode * node2Delete)
 	{
 		GeoNearSearchNode *parentNode = node2Delete->parent;
 		if (parentNode != NULL)
@@ -376,7 +376,7 @@ namespace rtree_index
 	}
 
 	
-	bool rtree_index::RTreeGeoNearCurosr::Trim(GeoNearSearchNode *Node2Trim)
+	bool rtree_index::RTreeGeoNearCursor::Trim(GeoNearSearchNode *Node2Trim)
 	{
 			if (Node2Trim->active_type == -1) //means this node is unexpended. It is impossible
 			{
@@ -407,7 +407,7 @@ namespace rtree_index
 	}
 
 	
-	bool rtree_index::RTreeGeoNearCurosr::InitCursor()
+	bool rtree_index::RTreeGeoNearCursor::InitCursor()
 	{
 			int Level = _root_node->data.Level;
 			_max_level = Level;
@@ -447,7 +447,7 @@ namespace rtree_index
 
 	
 	
-	mongo::BSONObj rtree_index::RTreeGeoNearCurosr::Next()
+	mongo::BSONObj rtree_index::RTreeGeoNearCursor::Next()
 	{
 		//if _closestBarrel[0].size()==0, it means there are no NNC found, no extra result was found.
 		if (_closestBarrel[0].size() == 0)
@@ -596,7 +596,7 @@ namespace rtree_index
 	 * must be called from the top Level to bottom level
 	 * please we use iteration rather than recursion to refresh _closestBarrel and _cmpVectors because it is faster.
 	 */
-	void rtree_index::RTreeGeoNearCurosr::RefreshNNCInLevel(int Level)
+	void rtree_index::RTreeGeoNearCursor::RefreshNNCInLevel(int Level)
 	{
 
 			
@@ -784,7 +784,7 @@ namespace rtree_index
 	
 	
 	
-	bool rtree_index::RTreeGeoNearCurosr::FillTheDataChilds(GeoNearSearchNode *Node2Fill)
+	bool rtree_index::RTreeGeoNearCursor::FillTheDataChilds(GeoNearSearchNode *Node2Fill)
 	{
 		vector<KeywithDis> tobeSort;
 		for (unsigned int i = 0; i < Node2Fill->data.Branchs.size(); i++)
@@ -825,7 +825,7 @@ namespace rtree_index
 	}
 
 	
-	void rtree_index::RTreeGeoNearCurosr::FreeCursor()
+	void rtree_index::RTreeGeoNearCursor::FreeCursor()
 	{
 		if (_closestBarrel[_closestBarrel.size() - 1].size() == 0)
 		{
@@ -835,7 +835,7 @@ namespace rtree_index
 	}
 
 	
-	void rtree_index::RTreeGeoNearCurosr::FreeNode(GeoNearSearchNode * node2Free)
+	void rtree_index::RTreeGeoNearCursor::FreeNode(GeoNearSearchNode * node2Free)
 	{
 		if (node2Free == NULL)
 		{
@@ -859,7 +859,7 @@ namespace rtree_index
 	}
 
 	
-	void rtree_index::RTreeGeoNearCurosr::PrintStatus()
+	void rtree_index::RTreeGeoNearCursor::PrintStatus()
 	{
 		cout << "CurrentDistance:  " << _CurrentMinDistance<<"  ";
 		cout << "activity_type:  " << _closestBarrel[1][0]->active_type;
@@ -875,7 +875,7 @@ namespace rtree_index
 		}
 	}
 
-	void rtree_index::RTreeGeoNearCurosr::RemoveNodeInCmpVectorAndclosestBarrel(GeoNearSearchNode * Node2Remove,  int DeleteLevel)
+	void rtree_index::RTreeGeoNearCursor::RemoveNodeInCmpVectorAndclosestBarrel(GeoNearSearchNode * Node2Remove,  int DeleteLevel)
 	{
 		vector<GeoNearSearchNode *>::iterator it;
 		for (it = _cmpVectors[DeleteLevel].begin(); it != _cmpVectors[DeleteLevel].end();)

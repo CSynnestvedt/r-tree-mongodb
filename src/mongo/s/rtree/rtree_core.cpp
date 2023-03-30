@@ -605,7 +605,7 @@ namespace rtree_index
 				}
 			
 				BSONObjBuilder result;
-				IO->Basic_Delect_Node_By_Key(txn,theOID,result);
+				IO->Basic_Delect_Node_By_Key(txn, theOID, result);
 				reInsertList.pop_back();
 			}
 		

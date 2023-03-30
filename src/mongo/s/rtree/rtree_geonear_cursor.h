@@ -39,11 +39,11 @@ namespace rtree_index
 	
 
 
-	class RTreeGeoNearCurosr
+	class RTreeGeoNearCursor
 	{
 	public:
-		RTreeGeoNearCurosr();
-		RTreeGeoNearCurosr(int Max_Node, GeoNearSearchNode *RootNode, MongoIO *IO, MongoIndexManagerIO *DataIO, double ctx, double cty, double minDistance, double maxDistance, string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME);
+		RTreeGeoNearCursor();
+		RTreeGeoNearCursor(int Max_Node, GeoNearSearchNode *RootNode, MongoIO *IO, MongoIndexManagerIO *DataIO, double ctx, double cty, double minDistance, double maxDistance, string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME);
 		vector<GeoNearSearchNode *> GetNNCInLevel(vector<GeoNearSearchNode *> NNCInUpperLevel, int Level);
 		bool InitCursor();
 		mongo::BSONObj Next();
