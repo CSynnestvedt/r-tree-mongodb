@@ -1,23 +1,24 @@
 /**
- *    Copyright (C) 2015 MongoDB Inc.
+ *    Copyright (C) 2018-present MongoDB, Inc.
  *
- *    This program is free software: you can redistribute it and/or  modify
- *    it under the terms of the GNU Affero General Public License, version 3,
- *    as published by the Free Software Foundation.
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
  *
  *    This program is distributed in the hope that it will be useful,
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU Affero General Public License for more details.
+ *    Server Side Public License for more details.
  *
- *    You should have received a copy of the GNU Affero General Public License
- *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  *    As a special exception, the copyright holders give permission to link the
  *    code of portions of this program with the OpenSSL library under certain
  *    conditions as described in each individual source file and distribute
  *    linked combinations including the program with the OpenSSL library. You
- *    must comply with the GNU Affero General Public License in all respects for
+ *    must comply with the Server Side Public License in all respects for
  *    all of the code used other than as permitted herein. If you modify file(s)
  *    with this exception, you may extend this exception to your version of the
  *    file(s), but you are not obligated to do so. If you do not wish to do so,
@@ -33,92 +34,74 @@
 
 #include "mongo/executor/task_executor.h"
 #include "mongo/s/query/cluster_client_cursor.h"
+#include "mongo/s/query/cluster_client_cursor_guard.h"
 #include "mongo/s/query/cluster_client_cursor_params.h"
+#include "mongo/s/query/cluster_query_result.h"
 #include "mongo/s/query/router_exec_stage.h"
 #include "mongo/util/net/hostandport.h"
-#include "mongo/db/commands.h"
 
 namespace mongo
 {
 
     class RouterStageMock;
 
-    /**
-     * An RAII object which owns a ClusterClientCursor and kills the cursor if it is not explicitly
-     * released.
-     */
-    class ClusterClientCursorGuard final
-    {
-
-    public:
-        ClusterClientCursorGuard(std::unique_ptr<ClusterClientCursor> ccc);
-
-        /**
-         * If a cursor is owned, safely destroys the cursor, cleaning up remote cursor state if
-         * necessary. May block waiting for remote cursor cleanup.
-         *
-         * If no cursor is owned, does nothing.
-         */
-        ~ClusterClientCursorGuard();
-
-#if defined(_MSC_VER) && _MSC_VER < 1900
-        ClusterClientCursorGuard(ClusterClientCursorGuard &&);
-        ClusterClientCursorGuard &operator=(ClusterClientCursorGuard &&);
-#else
-        ClusterClientCursorGuard(ClusterClientCursorGuard &&) = default;
-        ClusterClientCursorGuard &operator=(ClusterClientCursorGuard &&) = default;
-#endif
-
-        /**
-         * Returns a pointer to the underlying cursor.
-         */
-        ClusterClientCursor *operator->();
-
-        /**
-         * Transfers ownership of the underlying cursor to the caller.
-         */
-        std::unique_ptr<ClusterClientCursor> releaseCursor();
-
-    private:
-        std::unique_ptr<ClusterClientCursor> _ccc;
-    };
-
     class ClusterClientCursorImpl final : public ClusterClientCursor
     {
+        ClusterClientCursorImpl(const ClusterClientCursorImpl &) = delete;
+        ClusterClientCursorImpl &operator=(const ClusterClientCursorImpl &) = delete;
 
     public:
         /**
-         * Constructs a CCC whose safe cleanup is ensured by an RAII object.
+         * Constructs a cluster query plan and CCC from the given parameters whose safe cleanup is
+         * ensured by an RAII object.
          */
-        static ClusterClientCursorGuard make(executor::TaskExecutor *executor,
+        static ClusterClientCursorGuard make(OperationContext *opCtx,
+                                             std::shared_ptr<executor::TaskExecutor> executor,
                                              ClusterClientCursorParams &&params);
 
-        static ClusterClientCursorGuard make(OperationContext *txn,
+        /**
+         * Constructs a CCC from the given execution tree 'root'. The CCC's safe cleanup is ensured by
+         * an RAII object.
+         */
+        static ClusterClientCursorGuard make(OperationContext *opCtx,
+                                             std::unique_ptr<RouterExecStage> root,
+                                             ClusterClientCursorParams &&params);
+
+        static ClusterClientCursorGuard make(OperationContext *opCtx,
                                              const char *ns,
                                              BSONObj &jsobj,
                                              BSONObjBuilder &anObjBuilder,
+                                             ClusterClientCursorParams &&params,
                                              int queryOptions);
-
-        /**
-         * Constructs a CCC whose result set is generated by a mock execution stage.
-         */
-        ClusterClientCursorImpl(std::unique_ptr<RouterStageMock> root);
-
-        ClusterClientCursorImpl(OperationContext *txn,
-                                const char *ns,
-                                BSONObj &jsobj,
-                                BSONObjBuilder &anObjBuilder,
-                                int queryOptions);
 
         StatusWith<ClusterQueryResult> next() final;
 
-        virtual void kill() final;
+        void kill(OperationContext *opCtx) final;
+
+        void reattachToOperationContext(OperationContext *opCtx) final;
+
+        void detachFromOperationContext() final;
+
+        OperationContext *getCurrentOperationContext() const final;
 
         bool isTailable() const final;
 
+        bool isTailableAndAwaitData() const final;
+
+        BSONObj getOriginatingCommand() const final;
+
+        const PrivilegeVector &getOriginatingPrivileges() const & final;
+        void getOriginatingPrivileges() && = delete;
+
+        bool partialResultsReturned() const final;
+
+        std::size_t getNumRemotes() const final;
+
+        BSONObj getPostBatchResumeToken() const final;
+
         long long getNumReturnedSoFar() const final;
 
-        virtual void queueResult(const BSONObj &obj) final;
+        void queueResult(const ClusterQueryResult &result) final;
 
         bool remotesExhausted() final;
 
@@ -126,25 +109,68 @@ namespace mongo
 
         void setExhausted(bool isExhausted);
 
-    private:
+        boost::optional<LogicalSessionId> getLsid() const final;
+
+        boost::optional<TxnNumber> getTxnNumber() const final;
+
+        APIParameters getAPIParameters() const final;
+
+        boost::optional<ReadPreferenceSetting> getReadPreference() const final;
+
+        boost::optional<repl::ReadConcernArgs> getReadConcern() const final;
+
+        Date_t getCreatedDate() const final;
+
+        Date_t getLastUseDate() const final;
+
+        void setLastUseDate(Date_t now) final;
+
+        boost::optional<uint32_t> getQueryHash() const final;
+
+        std::uint64_t getNBatches() const final;
+
+        void incNBatches() final;
+
+    public:
+        /**
+         * Constructs a CCC whose result set is generated by a mock execution stage.
+         */
+        ClusterClientCursorImpl(OperationContext *opCtx,
+                                std::unique_ptr<RouterExecStage> root,
+                                ClusterClientCursorParams &&params,
+                                boost::optional<LogicalSessionId> lsid);
+
         /**
          * Constructs a cluster client cursor.
          */
-        ClusterClientCursorImpl(executor::TaskExecutor *executor, ClusterClientCursorParams &&params);
+        ClusterClientCursorImpl(OperationContext *opCtx,
+                                std::shared_ptr<executor::TaskExecutor> executor,
+                                ClusterClientCursorParams &&params,
+                                boost::optional<LogicalSessionId> lsid);
 
+        ClusterClientCursorImpl(OperationContext *opCtx,
+                                const char *ns,
+                                BSONObj &jsobj,
+                                BSONObjBuilder &anObjBuilder,
+                                ClusterClientCursorParams &&params,
+                                int queryOptions);
+
+        ~ClusterClientCursorImpl() final;
+
+    private:
         /**
          * Constructs the pipeline of MergerPlanStages which will be used to answer the query.
          */
-        std::unique_ptr<RouterExecStage> buildMergerPlan(executor::TaskExecutor *executor,
-                                                         ClusterClientCursorParams &&params);
+        std::unique_ptr<RouterExecStage> buildMergerPlan(
+            OperationContext *opCtx,
+            std::shared_ptr<executor::TaskExecutor> executor,
+            ClusterClientCursorParams *params);
 
-        bool _isTailable = false;
-
-        bool _isRtree = false;
+        ClusterClientCursorParams _params;
 
         bool _isExhausted = false;
 
-        Command *_command;
+        bool _isRtree = false;
 
         // Number of documents already returned by next().
         long long _numReturnedSoFar = 0;
@@ -152,8 +178,30 @@ namespace mongo
         // The root stage of the pipeline used to return the result set, merged from the remote nodes.
         std::unique_ptr<RouterExecStage> _root;
 
-        // Stores documents queued by queueResult(). Stashed BSONObjs must be owned.
-        std::queue<BSONObj> _stash;
+        // Stores documents queued by queueResult(). BSONObjs within the stashed results must be owned.
+        std::queue<ClusterQueryResult> _stash;
+
+        // Stores the logical session id for this cursor.
+        boost::optional<LogicalSessionId> _lsid;
+
+        // The OperationContext that we're executing within. This can be updated if necessary by using
+        // detachFromOperationContext() and reattachToOperationContext().
+        OperationContext *_opCtx = nullptr;
+
+        // The time the cursor was created.
+        Date_t _createdDate;
+
+        // The time when the cursor was last unpinned, i.e. the end of the last getMore.
+        Date_t _lastUseDate;
+
+        // The hash of the query shape to be used for slow query logging;
+        boost::optional<uint32_t> _queryHash;
+
+        // The number of batches returned by this cursor.
+        std::uint64_t _nBatchesReturned = 0;
+
+        // Whether ClusterClientCursor::next() was interrupted due to MaxTimeMSExpired.
+        bool _maxTimeMSExpired = false;
     };
 
 } // namespace mongo

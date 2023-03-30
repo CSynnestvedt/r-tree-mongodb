@@ -1,23 +1,24 @@
 /**
- *    Copyright (C) 2015 MongoDB Inc.
+ *    Copyright (C) 2018-present MongoDB, Inc.
  *
- *    This program is free software: you can redistribute it and/or  modify
- *    it under the terms of the GNU Affero General Public License, version 3,
- *    as published by the Free Software Foundation.
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
  *
  *    This program is distributed in the hope that it will be useful,
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU Affero General Public License for more details.
+ *    Server Side Public License for more details.
  *
- *    You should have received a copy of the GNU Affero General Public License
- *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
  *
  *    As a special exception, the copyright holders give permission to link the
  *    code of portions of this program with the OpenSSL library under certain
  *    conditions as described in each individual source file and distribute
  *    linked combinations including the program with the OpenSSL library. You
- *    must comply with the GNU Affero General Public License in all respects for
+ *    must comply with the Server Side Public License in all respects for
  *    all of the code used other than as permitted herein. If you modify file(s)
  *    with this exception, you may extend this exception to your version of the
  *    file(s), but you are not obligated to do so. If you do not wish to do so,
@@ -26,95 +27,97 @@
  *    it in the license file.
  */
 
-#define MONGO_LOGV2_DEFAULT_COMPONENT ::mongo::logv2::LogComponent::kQuery
+#include "mongo/s/query/cluster_client_cursor_impl_modified.h"
 
-#include "mongo/platform/basic.h"
+#include <memory>
 
-#include "mongo/s/query/cluster_client_cursor_impl.h"
-#include <iostream>
-
+#include "mongo/db/curop.h"
 #include "mongo/s/query/router_stage_limit.h"
 #include "mongo/s/query/router_stage_merge.h"
-#include "mongo/s/query/router_stage_mock.h"
-#include "mongo/s/query/router_stage_remove_sortkey.h"
+#include "mongo/s/query/router_stage_remove_metadata_fields.h"
 #include "mongo/s/query/router_stage_skip.h"
-#include "mongo/stdx/memory.h"
 #include "mongo/s/grid.h"
-#include "mongo/s/catalog/catalog_cache.h"
-#include "mongo/s/config.h"
-#include "mongo/db/query/find_common.h"
-
-using namespace std;
+#include "mongo/db/s/config/sharding_catalog_manager.h"
 
 namespace mongo
 {
 
-    ClusterClientCursorGuard::ClusterClientCursorGuard(std::unique_ptr<ClusterClientCursor> ccc)
-        : _ccc(std::move(ccc)) {}
+    static CounterMetric mongosCursorStatsTotalOpened("mongos.cursor.totalOpened");
+    static CounterMetric mongosCursorStatsMoreThanOneBatch("mongos.cursor.moreThanOneBatch");
 
-    ClusterClientCursorGuard::~ClusterClientCursorGuard()
+    ClusterClientCursorGuard ClusterClientCursorImpl::make(
+        OperationContext *opCtx,
+        std::shared_ptr<executor::TaskExecutor> executor,
+        ClusterClientCursorParams &&params)
     {
-        if (_ccc && !_ccc->remotesExhausted())
-        {
-            _ccc->kill();
-        }
+        std::unique_ptr<ClusterClientCursor> cursor(new ClusterClientCursorImpl(
+            opCtx, std::move(executor), std::move(params), opCtx->getLogicalSessionId()));
+        return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
-#if defined(_MSC_VER) && _MSC_VER < 1900
-    ClusterClientCursorGuard::ClusterClientCursorGuard(ClusterClientCursorGuard &&other)
-        : _ccc(std::move(other._ccc))
-    {
-    }
-
-    ClusterClientCursorGuard &ClusterClientCursorGuard::operator=(ClusterClientCursorGuard &&other)
-    {
-        _ccc = std::move(other._ccc);
-        return *this;
-    }
-
-#endif
-
-    ClusterClientCursor *ClusterClientCursorGuard::operator->()
-    {
-        return _ccc.get();
-    }
-
-    std::unique_ptr<ClusterClientCursor> ClusterClientCursorGuard::releaseCursor()
-    {
-        return std::move(_ccc);
-    }
-
-    ClusterClientCursorGuard ClusterClientCursorImpl::make(executor::TaskExecutor *executor,
+    ClusterClientCursorGuard ClusterClientCursorImpl::make(OperationContext *opCtx,
+                                                           std::unique_ptr<RouterExecStage> root,
                                                            ClusterClientCursorParams &&params)
     {
-        std::unique_ptr<ClusterClientCursor> cursor(
-            new ClusterClientCursorImpl(executor, std::move(params)));
-        return ClusterClientCursorGuard(std::move(cursor));
+        std::unique_ptr<ClusterClientCursor> cursor(new ClusterClientCursorImpl(
+            opCtx, std::move(root), std::move(params), opCtx->getLogicalSessionId()));
+        return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
-    ClusterClientCursorGuard ClusterClientCursorImpl::make(OperationContext *txn,
+    ClusterClientCursorGuard ClusterClientCursorImpl::make(OperationContext *opCtx,
                                                            const char *ns,
                                                            BSONObj &jsobj,
                                                            BSONObjBuilder &anObjBuilder,
+                                                           ClusterClientCursorParams &&params,
                                                            int queryOptions)
     {
         std::unique_ptr<ClusterClientCursor> cursor(
-            new ClusterClientCursorImpl(txn, ns, jsobj, anObjBuilder, queryOptions));
-        return ClusterClientCursorGuard(std::move(cursor));
+            new ClusterClientCursorImpl(opCtx, ns, jsobj, anObjBuilder, std::move(params), queryOptions));
+        return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
-    ClusterClientCursorImpl::ClusterClientCursorImpl(executor::TaskExecutor *executor,
-                                                     ClusterClientCursorParams &&params)
-        : _isTailable(params.isTailable), _root(buildMergerPlan(executor, std::move(params))) {}
+    ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext *opCtx,
+                                                     std::shared_ptr<executor::TaskExecutor> executor,
+                                                     ClusterClientCursorParams &&params,
+                                                     boost::optional<LogicalSessionId> lsid)
+        : _params(std::move(params)),
+          _root(buildMergerPlan(opCtx, std::move(executor), &_params)),
+          _lsid(lsid),
+          _opCtx(opCtx),
+          _createdDate(opCtx->getServiceContext()->getPreciseClockSource()->now()),
+          _lastUseDate(_createdDate),
+          _queryHash(CurOp::get(opCtx)->debug().queryHash)
+    {
+        dassert(!_params.compareWholeSortKeyOnRouter ||
+                SimpleBSONObjComparator::kInstance.evaluate(
+                    _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
+        mongosCursorStatsTotalOpened.increment();
+    }
 
-    ClusterClientCursorImpl::ClusterClientCursorImpl(std::unique_ptr<RouterStageMock> root)
-        : _root(std::move(root)) {}
+    ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext *opCtx,
+                                                     std::unique_ptr<RouterExecStage> root,
+                                                     ClusterClientCursorParams &&params,
+                                                     boost::optional<LogicalSessionId> lsid)
+        : _params(std::move(params)),
+          _root(std::move(root)),
+          _lsid(lsid),
+          _opCtx(opCtx),
+          _createdDate(opCtx->getServiceContext()->getPreciseClockSource()->now()),
+          _lastUseDate(_createdDate),
+          _queryHash(CurOp::get(opCtx)->debug().queryHash)
+    {
+        dassert(!_params.compareWholeSortKeyOnRouter ||
+                SimpleBSONObjComparator::kInstance.evaluate(
+                    _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
+        mongosCursorStatsTotalOpened.increment();
+    }
 
-    ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext *txn,
+    ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext *opCtx,
                                                      const char *ns,
                                                      BSONObj &jsobj,
                                                      BSONObjBuilder &anObjBuilder,
-                                                     int queryOptions) : _isRtree(true)
+                                                     ClusterClientCursorParams &&params,
+                                                     int queryOptions) : _params(std::move(params)), _isRtree(true)
     {
         BSONElement e = jsobj.firstElement();
         std::string dbname = nsToDatabase(ns);
@@ -139,14 +142,15 @@ namespace mongo
         // Whether the query type is point
         bool is_type_point = false;
 
-        bdr.append("NAMESPACE", dbname + "." + collName);
-        auto database_status = grid.catalogCache()->getDatabase(txn, dbname);
+        bdr.append("namespace", dbname + "." + collName);
+        auto database_status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbname);
         uassertStatusOK(database_status.getStatus());
-        std::shared_ptr<DBConfig> conf = database_status.getValue();
-        BSONObj geometadata = conf->getGeometry(txn, bdr.obj());
+        // std::shared_ptr<DBConfig> conf = database_status.getValue();
+        // BSONObj geometadata = conf->getGeometry(opCtx, bdr.obj());
+        BSONObj geometadata = ShardingCatalogManager::get(opCtx)->getGeometry(opCtx, bdr.obj());
         // if (!geometadata.isEmpty())
         // is_rtree = geometadata["INDEX_TYPE"].Int() != 0 ? true : false;
-        columnName = geometadata["COLUMN_NAME"].str();
+        columnName = geometadata["column_name"].str();
         BSONElement geowithincomm;
         BSONObj geometry;
         BSONObj type;
@@ -228,21 +232,20 @@ namespace mongo
             jsobj = cmdObj.obj();
         }
         // log()<<"before run, check the command name:"<<commandName;
-        _command = e.type() ? Command::findCommand(commandName) : NULL;
+        auto _command = e.type() ? CommandHelpers::findCommand(commandName) : NULL;
 
-        if (jsobj.getBoolField("help"))
-        {
-            std::stringstream help;
-            help << "help for: " << _command->name << " ";
-            _command->help(help);
-            anObjBuilder.append("help", help.str());
-            anObjBuilder.append("lockType", _command->isWriteCommandForConfigServer() ? 1 : 0);
-            // appendCommandStatus(anObjBuilder, true, "");
-            return;
-        }
+        // // if (jsobj.getBoolField("help"))
+        // // {
+        // //     std::stringstream help;
+        // //     help << "help for: " << commandName << " ";
+        // //     _command->generateHelpResponse(opCtx, help);
+        // //     anObjBuilder.append("help", help.str());
+        // //     anObjBuilder.append("lockType", _command->isWriteCommandForConfigServer() ? 1 : 0);
+        // //     // appendCommandStatus(anObjBuilder, true, "");
+        // //     return;
+        // // }
         /*
        _command->_commandsExecuted.increment();
-
        if (_command->shouldAffectCommandCounter()) {
            globalOpCounters.gotCommand();
        }
@@ -251,15 +254,15 @@ namespace mongo
         bool ok = false;
         try
         {
-            ok = _command->run(txn, dbname, jsobj, queryOptions, errmsg, anObjBuilder);
+            ok = _command->(opCtx, dbname, jsobj, queryOptions, errmsg, anObjBuilder);
         }
         catch (const DBException &e)
         {
             anObjBuilder.resetToEmpty();
-            const int code = e.getCode();
+            const int code = e.code();
 
             // Codes for StaleConfigException
-            if (code == ErrorCodes::RecvStaleConfig || code == ErrorCodes::SendStaleConfig)
+            if (code == ErrorCodes::StaleConfig)
             {
                 throw;
             }
@@ -275,53 +278,97 @@ namespace mongo
         // appendCommandStatus(anObjBuilder, ok, errmsg);
     }
 
-    StatusWith<boost::optional<BSONObj>> ClusterClientCursorImpl::next()
+    ClusterClientCursorImpl::~ClusterClientCursorImpl()
     {
+        if (_nBatchesReturned > 1)
+            mongosCursorStatsMoreThanOneBatch.increment();
+    }
+
+    StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next()
+    {
+        invariant(_opCtx);
+        const auto interruptStatus = _opCtx->checkForInterruptNoAssert();
+        if (!interruptStatus.isOK())
+        {
+            _maxTimeMSExpired |= (interruptStatus.code() == ErrorCodes::MaxTimeMSExpired);
+            return interruptStatus;
+        }
+
         // First return stashed results, if there are any.
         if (!_stash.empty())
         {
-            BSONObj front = std::move(_stash.front());
+            auto front = std::move(_stash.front());
             _stash.pop();
             ++_numReturnedSoFar;
             return {front};
         }
-        // std::cout<<"进入next"<<endl;
-        if (_isRtree)
+
+        auto next = _root->next();
+        if (next.isOK() && !next.getValue().isEOF())
         {
-            // std::cout<<"isRtree"<<endl;
-            // std::cout<<_command->name<<"  ---zai next li"<<endl;
-            int size = _command->rtreeDataMore(20, _stash);
-            if (size != 0)
-            {
-                BSONObj front = std::move(_stash.front());
-                _stash.pop();
-                ++_numReturnedSoFar;
-                return {front};
-            }
-            return BSONObj();
+            ++_numReturnedSoFar;
         }
-        else
-        {
-            auto next = _root->next();
-            if (next.isOK() && next.getValue())
-            {
-                ++_numReturnedSoFar;
-            }
-            return next;
-        }
+        // Record if we just got a MaxTimeMSExpired error.
+        _maxTimeMSExpired |= (next.getStatus().code() == ErrorCodes::MaxTimeMSExpired);
+        return next;
     }
 
-    void ClusterClientCursorImpl::kill()
+    void ClusterClientCursorImpl::kill(OperationContext *opCtx)
     {
-        if (!_isRtree)
-            _root->kill();
-        else
-            _command->freeCursor();
+        _root->kill(opCtx);
+    }
+
+    void ClusterClientCursorImpl::reattachToOperationContext(OperationContext *opCtx)
+    {
+        _opCtx = opCtx;
+        _root->reattachToOperationContext(opCtx);
+    }
+
+    void ClusterClientCursorImpl::detachFromOperationContext()
+    {
+        _opCtx = nullptr;
+        _root->detachFromOperationContext();
+    }
+
+    OperationContext *ClusterClientCursorImpl::getCurrentOperationContext() const
+    {
+        return _opCtx;
     }
 
     bool ClusterClientCursorImpl::isTailable() const
     {
-        return _isTailable;
+        return _params.tailableMode != TailableModeEnum::kNormal;
+    }
+
+    bool ClusterClientCursorImpl::isTailableAndAwaitData() const
+    {
+        return _params.tailableMode == TailableModeEnum::kTailableAndAwaitData;
+    }
+
+    BSONObj ClusterClientCursorImpl::getOriginatingCommand() const
+    {
+        return _params.originatingCommandObj;
+    }
+
+    const PrivilegeVector &ClusterClientCursorImpl::getOriginatingPrivileges() const &
+    {
+        return _params.originatingPrivileges;
+    }
+
+    bool ClusterClientCursorImpl::partialResultsReturned() const
+    {
+        // We may have timed out in this layer, or within the plan tree waiting for results from shards.
+        return (_maxTimeMSExpired && _params.isAllowPartialResults) || _root->partialResultsReturned();
+    }
+
+    std::size_t ClusterClientCursorImpl::getNumRemotes() const
+    {
+        return _root->getNumRemotes();
+    }
+
+    BSONObj ClusterClientCursorImpl::getPostBatchResumeToken() const
+    {
+        return _root->getPostBatchResumeToken();
     }
 
     long long ClusterClientCursorImpl::getNumReturnedSoFar() const
@@ -329,22 +376,23 @@ namespace mongo
         return _numReturnedSoFar;
     }
 
-    void ClusterClientCursorImpl::queueResult(const BSONObj &obj)
+    void ClusterClientCursorImpl::queueResult(const ClusterQueryResult &result)
     {
-        invariant(obj.isOwned());
-        _stash.push(obj);
+        auto resultObj = result.getResult();
+        if (resultObj)
+        {
+            invariant(resultObj->isOwned());
+        }
+        _stash.push(result);
     }
-    // for r-tree
+
     void ClusterClientCursorImpl::setExhausted(bool isExhausted)
     {
         _isExhausted = isExhausted;
-        // std::cout<<"is exhausted in cursor?  "<< isExhausted<<endl;
     }
 
     bool ClusterClientCursorImpl::remotesExhausted()
     {
-        if (_isRtree)
-            return _isExhausted;
         return _root->remotesExhausted();
     }
 
@@ -353,30 +401,88 @@ namespace mongo
         return _root->setAwaitDataTimeout(awaitDataTimeout);
     }
 
-    std::unique_ptr<RouterExecStage> ClusterClientCursorImpl::buildMergerPlan(
-        executor::TaskExecutor *executor, ClusterClientCursorParams &&params)
+    boost::optional<LogicalSessionId> ClusterClientCursorImpl::getLsid() const
     {
-        const auto skip = params.skip;
-        const auto limit = params.limit;
-        const bool hasSort = !params.sort.isEmpty();
+        return _lsid;
+    }
 
-        // The first stage is always the one which merges from the remotes.
+    boost::optional<TxnNumber> ClusterClientCursorImpl::getTxnNumber() const
+    {
+        return _params.txnNumber;
+    }
+
+    Date_t ClusterClientCursorImpl::getCreatedDate() const
+    {
+        return _createdDate;
+    }
+
+    Date_t ClusterClientCursorImpl::getLastUseDate() const
+    {
+        return _lastUseDate;
+    }
+
+    void ClusterClientCursorImpl::setLastUseDate(Date_t now)
+    {
+        _lastUseDate = std::move(now);
+    }
+
+    boost::optional<uint32_t> ClusterClientCursorImpl::getQueryHash() const
+    {
+        return _queryHash;
+    }
+
+    std::uint64_t ClusterClientCursorImpl::getNBatches() const
+    {
+        return _nBatchesReturned;
+    }
+
+    void ClusterClientCursorImpl::incNBatches()
+    {
+        ++_nBatchesReturned;
+    }
+
+    APIParameters ClusterClientCursorImpl::getAPIParameters() const
+    {
+        return _params.apiParameters;
+    }
+
+    boost::optional<ReadPreferenceSetting> ClusterClientCursorImpl::getReadPreference() const
+    {
+        return _params.readPreference;
+    }
+
+    boost::optional<repl::ReadConcernArgs> ClusterClientCursorImpl::getReadConcern() const
+    {
+        return _params.readConcern;
+    }
+
+    std::unique_ptr<RouterExecStage> ClusterClientCursorImpl::buildMergerPlan(
+        OperationContext *opCtx,
+        std::shared_ptr<executor::TaskExecutor> executor,
+        ClusterClientCursorParams *params)
+    {
+        const auto skip = params->skipToApplyOnRouter;
+        const auto limit = params->limit;
+
         std::unique_ptr<RouterExecStage> root =
-            stdx::make_unique<RouterStageMerge>(executor, std::move(params));
+            std::make_unique<RouterStageMerge>(opCtx, executor, params->extractARMParams());
 
         if (skip)
         {
-            root = stdx::make_unique<RouterStageSkip>(std::move(root), *skip);
+            root = std::make_unique<RouterStageSkip>(opCtx, std::move(root), *skip);
         }
 
         if (limit)
         {
-            root = stdx::make_unique<RouterStageLimit>(std::move(root), *limit);
+            root = std::make_unique<RouterStageLimit>(opCtx, std::move(root), *limit);
         }
 
+        const bool hasSort = !params->sortToApplyOnRouter.isEmpty();
         if (hasSort)
         {
-            root = stdx::make_unique<RouterStageRemoveSortKey>(std::move(root));
+            // Strip out the sort key after sorting.
+            root = std::make_unique<RouterStageRemoveMetadataFields>(
+                opCtx, std::move(root), StringDataSet{AsyncResultsMerger::kSortKeyField});
         }
 
         return root;
