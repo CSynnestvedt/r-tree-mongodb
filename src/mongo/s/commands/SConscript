@@ -100,11 +100,11 @@ env.Library(
         'cluster_write_cmd_s.cpp',
         'cluster_write_without_shard_key_cmd.cpp',
         'delete_contained_geo_obj_cmd.cpp',
-        'delete_geo_by_id.cpp',
+        'delete_geo_by_id_cmd.cpp',
         'geo_intersect_search_cmd.cpp',
         'geo_near_search_cmd.cpp',
         'geo_within_search_cmd.cpp',
-        'insert_indexed_doc_cmd.cpp'
+        'insert_indexed_doc_cmd.cpp',
         'internal_transactions_test_command_s.cpp',
         'kill_sessions_remote.cpp',
         'refine_collection_shard_key.idl',

@@ -117,7 +117,7 @@ namespace mongo
                 // Is the command for Rree
                 bool is_rtree = false;
 
-                std::string errmsg;
+                std::string errmsgRtree;
                 BSONObj index = cmdObj["indexes"].Array()[0].Obj()["key"].Obj();
                 // log() << "index:"<< index;
                 std::set<std::string> fields;
@@ -132,7 +132,7 @@ namespace mongo
                         auto columnname = *it;
                         // log() << columename << endl;
                         is_rtree = true;
-                        return createRtreeIndex(opCtx, dbName.db(), cmdObj, columnname, errmsg, output);
+                        return createRtreeIndex(opCtx, dbName.db(), cmdObj, columnname, errmsgRtree, output);
                     }
                 }
 

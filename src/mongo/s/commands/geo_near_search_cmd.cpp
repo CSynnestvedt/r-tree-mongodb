@@ -94,7 +94,7 @@ public:
             if (!pRTreeIO->IsConnected())
                 pRTreeIO->connectMyself();
 
-            string collection = cmdObj["collection"].str();
+            std::string collection = cmdObj["collection"].str();
             BSONObj condition = cmdObj["condition"].Obj();
             double center_x = condition["coordinates"].Array()[0].numberDouble();
             double center_y = condition["coordinates"].Array()[1].numberDouble();

@@ -29,7 +29,7 @@ namespace rtree_index
 	class RTreeCursor
 	{
 	public:
-		RTreeCursor(vector<Key> resultKeys, string DB_NAME, string STORAGE_NAME)
+		RTreeCursor(std::vector<Key> resultKeys, std::string DB_NAME, std::string STORAGE_NAME)
 		{
 			_DB_NAME = DB_NAME;
 			_STORAGE_NAME = STORAGE_NAME;
@@ -41,10 +41,10 @@ namespace rtree_index
 		{
 			return MaxNum;
 		}
-		string _DB_NAME;
-		string _STORAGE_NAME;
+		std::string _DB_NAME;
+		std::string _STORAGE_NAME;
 		int currentNum;
 		int MaxNum;
-		vector<Key> allKeys;
+		std::vector<Key> allKeys;
 	};
 }

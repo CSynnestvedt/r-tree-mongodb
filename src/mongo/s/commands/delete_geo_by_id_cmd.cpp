@@ -105,7 +105,7 @@ public:
         return ok;
     }
     // Slaves can't perform writes.
-    bool CmdDeleteGeoByID::slaveOk() const { return false; }
+    bool slaveOk() const { return false; }
     
    // all grid commands are designed not to lock
     virtual bool isWriteCommandForConfigServer() const {
