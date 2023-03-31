@@ -251,7 +251,7 @@ namespace mongo
         }
 
         CursorId runQueryWithoutRetrying(OperationContext *opCtx,
-                                                     const char *ns,
+                                                     const NamespaceString nss,
                                                      BSONObj &jsobj,
                                                      const boost::optional<UUID> sampleId,
                                                      const CollectionRoutingInfo &cri,
@@ -278,7 +278,7 @@ namespace mongo
 
             // log()<<"entering runQueryWithoutRetrying";
             BSONElement e = jsobj.firstElement();
-            std::string dbname = nsToDatabase(ns);
+            std::string dbname = nss.dbName().db();
             std::string collName = e.String();
             std::string columnName;
             BSONObj query_condition;
@@ -917,10 +917,72 @@ namespace mongo
             return cursorId;
         }
 
-        // RTree query
-        const size_t ClusterFind::kMaxRetries = 10;
+        /**
+         * Populates or re-populates some state of the OperationContext from what's stored on the cursor
+         * and/or what's specified on the request.
+         */
+        Status setUpOperationContextStateForGetMore(OperationContext *opCtx,
+                                                    const GetMoreCommandRequest &cmd,
+                                                    const ClusterCursorManager::PinnedCursor &cursor)
+        {
+            if (auto readPref = cursor->getReadPreference())
+            {
+                ReadPreferenceSetting::get(opCtx) = *readPref;
+            }
+
+            if (auto readConcern = cursor->getReadConcern())
+            {
+                // Used to return "atClusterTime" in cursor replies to clients for snapshot reads.
+                repl::ReadConcernArgs::get(opCtx) = *readConcern;
+            }
+
+            auto apiParamsFromClient = APIParameters::get(opCtx);
+            uassert(ErrorCodes::APIMismatchError,
+                    "API parameter mismatch: getMore used params {}, the cursor-creating command "
+                    "used {}"_format(apiParamsFromClient.toBSON().toString(),
+                                     cursor->getAPIParameters().toBSON().toString()),
+                    apiParamsFromClient == cursor->getAPIParameters());
+
+            // If the originating command had a 'comment' field, we extract it and set it on opCtx. Note
+            // that if the 'getMore' command itself has a 'comment' field, we give precedence to it.
+            auto comment = cursor->getOriginatingCommand()["comment"];
+            if (!opCtx->getComment() && comment)
+            {
+                stdx::lock_guard<Client> lk(*opCtx->getClient());
+                opCtx->setComment(comment.wrap());
+            }
+
+            if (cursor->isTailableAndAwaitData())
+            {
+                // For tailable + awaitData cursors, the request may have indicated a maximum amount of time
+                // to wait for new data. If not, default it to 1 second.  We track the deadline instead via
+                // the 'waitForInsertsDeadline' decoration.
+                auto timeout = Milliseconds{cmd.getMaxTimeMS().value_or(1000)};
+                awaitDataState(opCtx).waitForInsertsDeadline =
+                    opCtx->getServiceContext()->getPreciseClockSource()->now() + timeout;
+                awaitDataState(opCtx).shouldWaitForInserts = true;
+                invariant(cursor->setAwaitDataTimeout(timeout).isOK());
+            }
+            else if (cmd.getMaxTimeMS())
+            {
+                return {ErrorCodes::BadValue,
+                        "maxTimeMS can only be used with getMore for tailable, awaitData cursors"};
+            }
+            else if (cursor->getLeftoverMaxTimeMicros() < Microseconds::max())
+            {
+                // Be sure to do this only for non-tailable cursors.
+                opCtx->setDeadlineAfterNowBy(cursor->getLeftoverMaxTimeMicros(),
+                                             ErrorCodes::MaxTimeMSExpired);
+            }
+            return Status::OK();
+        }
+
+    } // namespace
+
+    const size_t ClusterFind::kMaxRetries = 10;
+    // RTree query
         CursorId ClusterFind::runQuery(OperationContext *opCtx,
-                                                   const char *ns,
+                                                   const NamespaceString nss,
                                                    BSONObj &jsobj,
                                                    CanonicalQuery &query,
                                                    const ReadPreferenceSetting &readPref,
@@ -984,7 +1046,7 @@ namespace mongo
                 {
                     return runQueryWithoutRetrying(
                                                      opCtx,
-                                                     ns,
+                                                     nss,
                                                      jsobj,
                                                      sampleId,
                                                      cri,
@@ -1107,69 +1169,8 @@ namespace mongo
             MONGO_UNREACHABLE
         }
 
-        /**
-         * Populates or re-populates some state of the OperationContext from what's stored on the cursor
-         * and/or what's specified on the request.
-         */
-        Status setUpOperationContextStateForGetMore(OperationContext *opCtx,
-                                                    const GetMoreCommandRequest &cmd,
-                                                    const ClusterCursorManager::PinnedCursor &cursor)
-        {
-            if (auto readPref = cursor->getReadPreference())
-            {
-                ReadPreferenceSetting::get(opCtx) = *readPref;
-            }
 
-            if (auto readConcern = cursor->getReadConcern())
-            {
-                // Used to return "atClusterTime" in cursor replies to clients for snapshot reads.
-                repl::ReadConcernArgs::get(opCtx) = *readConcern;
-            }
 
-            auto apiParamsFromClient = APIParameters::get(opCtx);
-            uassert(ErrorCodes::APIMismatchError,
-                    "API parameter mismatch: getMore used params {}, the cursor-creating command "
-                    "used {}"_format(apiParamsFromClient.toBSON().toString(),
-                                     cursor->getAPIParameters().toBSON().toString()),
-                    apiParamsFromClient == cursor->getAPIParameters());
-
-            // If the originating command had a 'comment' field, we extract it and set it on opCtx. Note
-            // that if the 'getMore' command itself has a 'comment' field, we give precedence to it.
-            auto comment = cursor->getOriginatingCommand()["comment"];
-            if (!opCtx->getComment() && comment)
-            {
-                stdx::lock_guard<Client> lk(*opCtx->getClient());
-                opCtx->setComment(comment.wrap());
-            }
-
-            if (cursor->isTailableAndAwaitData())
-            {
-                // For tailable + awaitData cursors, the request may have indicated a maximum amount of time
-                // to wait for new data. If not, default it to 1 second.  We track the deadline instead via
-                // the 'waitForInsertsDeadline' decoration.
-                auto timeout = Milliseconds{cmd.getMaxTimeMS().value_or(1000)};
-                awaitDataState(opCtx).waitForInsertsDeadline =
-                    opCtx->getServiceContext()->getPreciseClockSource()->now() + timeout;
-                awaitDataState(opCtx).shouldWaitForInserts = true;
-                invariant(cursor->setAwaitDataTimeout(timeout).isOK());
-            }
-            else if (cmd.getMaxTimeMS())
-            {
-                return {ErrorCodes::BadValue,
-                        "maxTimeMS can only be used with getMore for tailable, awaitData cursors"};
-            }
-            else if (cursor->getLeftoverMaxTimeMicros() < Microseconds::max())
-            {
-                // Be sure to do this only for non-tailable cursors.
-                opCtx->setDeadlineAfterNowBy(cursor->getLeftoverMaxTimeMicros(),
-                                             ErrorCodes::MaxTimeMSExpired);
-            }
-            return Status::OK();
-        }
-
-    } // namespace
-
-    const size_t ClusterFind::kMaxRetries = 10;
 
     CursorId ClusterFind::runQuery(OperationContext *opCtx,
                                    const CanonicalQuery &query,
