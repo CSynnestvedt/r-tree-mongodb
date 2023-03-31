@@ -184,7 +184,7 @@ namespace mongo
 
         bool _isRtreeCursorOK = false;
 
-        std::unique_ptr<RTreeGeoNearCurosr> _rtreeGeoNearCursor;
+        std::unique_ptr<RTreeGeoNearCursor> _rtreeGeoNearCursor;
 
         // Number of documents already returned by next().
         long long _numReturnedSoFar = 0;

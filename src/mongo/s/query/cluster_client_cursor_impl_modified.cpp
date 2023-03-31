@@ -254,7 +254,7 @@ namespace mongo
         bool ok = false;
         try
         {
-            ok = _command->(opCtx, dbname, jsobj, queryOptions, errmsg, anObjBuilder);
+            ok = _command(opCtx, dbname, jsobj, queryOptions, errmsg, anObjBuilder);
         }
         catch (const DBException &e)
         {

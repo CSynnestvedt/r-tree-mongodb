@@ -879,19 +879,19 @@ namespace mongo
         }
 
         // RTree query
-        StatusWith<CursorId> ClusterFind::runQuery(OperationContext *txn,
-                                                   const CanonicalQuery &query,
-                                                   const ReadPreferenceSetting &readPref,
+        StatusWith<CursorId> ClusterFind::runQuery(OperationContext *opCtx,
                                                    const char *ns,
                                                    BSONObj &jsobj,
+                                                   CanonicalQuery &query,
+                                                   const ReadPreferenceSetting &readPref,
                                                    BSONObjBuilder &anObjBuilder,
                                                    int queryOptions,
                                                    std::vector<BSONObj> *results)
         {
             // log()<<"entering runQuery()";
             invariant(results);
-            auto cursorId = runQueryWithoutRetrying(
-                txn, ns, jsobj, query, readPref, anObjBuilder, queryOptions, results);
+            auto cursorId = runQueryWithoutRetrying(opCtx, ns, jsobj, query, readPref, anObjBuilder, queryOptions, results);
+
             if (cursorId.isOK())
             {
                 return cursorId;

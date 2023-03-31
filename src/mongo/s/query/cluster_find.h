@@ -72,11 +72,11 @@ namespace mongo
         /**
          * Overload a runQuery to handle queries with rtree
          */
-        static StatusWith<CursorId> runQuery(OperationContext *txn,
-                                             const CanonicalQuery &query,
-                                             const ReadPreferenceSetting &readPref,
+        static StatusWith<CursorId> runQuery(OperationContext *opCtx,
                                              const char *ns,
                                              BSONObj &jsobj,
+                                             CanonicalQuery &query,
+                                             const ReadPreferenceSetting &readPref,
                                              BSONObjBuilder &anObjBuilder,
                                              int queryOptions,
                                              std::vector<BSONObj> *results);
