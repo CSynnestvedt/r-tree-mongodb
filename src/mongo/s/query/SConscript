@@ -52,7 +52,9 @@ env.Library(
 env.Library(
     target='cluster_client_cursor',
     source=[
-        'cluster_client_cursor_impl.cpp',
+        'cluster_client_cursor_impl_modified.cpp',
+        'cluster_client_cursor_impl_rtree_near.cpp',
+        'cluster_client_cursor_impl_rtree_range.cpp',
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/shared_request_handling',

@@ -61,7 +61,7 @@
 #include "mongo/s/cluster_commands_helpers.h"
 #include "mongo/s/grid.h"
 #include "mongo/s/query/async_results_merger.h"
-#include "mongo/s/query/cluster_client_cursor_impl.h"
+#include "mongo/s/query/cluster_client_cursor_impl_modified.h"
 #include "mongo/s/query/cluster_cursor_manager.h"
 #include "mongo/s/query/establish_cursors.h"
 #include "mongo/s/query/store_possible_cursor.h"
@@ -70,6 +70,7 @@
 #include "mongo/s/transaction_router.h"
 #include "mongo/util/fail_point.h"
 #include "mongo/util/scopeguard.h"
+#include "mongo/db/s/config/sharding_catalog_manager.h"
 
 // r-tree cursor
 #include "mongo/s/query/cluster_client_cursor_impl_rtree_range.h"
@@ -252,6 +253,8 @@ namespace mongo
         StatusWith<CursorId> runQueryWithoutRetrying(OperationContext *opCtx,
                                                      const char *ns,
                                                      BSONObj &jsobj,
+                                                     CanonicalQuery &query,
+                                                     const ReadPreferenceSetting &readPref,
                                                      BSONObjBuilder &anObjBuilder,
                                                      int queryOptions,
                                                      std::vector<BSONObj> *results)
@@ -274,12 +277,17 @@ namespace mongo
             Grid grid;
 
             BSONObjBuilder bdr;
-            bdr.append("NAMESPACE", dbname + "." + collName);
-            auto database_status = grid.catalogCache()->getDatabase(opCtx, dbname);
-            uassertStatusOK(database_status.getStatus());
-            std::shared_ptr<DBConfig> conf = database_status.getValue();
-            BSONObj geometadata = conf->getGeometry(opCtx, bdr.obj());
-            columnName = geometadata["COLUMN_NAME"].str();
+            bdr.append("datanamespace", dbname + "." + collName);
+            // auto database_status = grid.catalogCache()->getDatabase(opCtx, dbname);
+            // uassertStatusOK(database_status.getStatus());
+            // std::shared_ptr<> conf = database_status.getValue();
+            // BSONObj geometadata = conf->getGeometry(opCtx, bdr.obj());
+            auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbname);
+            uassertStatusOK(status.getStatus());
+
+            // DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
+            BSONObj geometadata = ShardingCatalogManager::get(opCtx)->getGeometry(opCtx, bdr.obj());
+            columnName = geometadata["column_name"].str();
             BSONElement geowithincomm;
             BSONObj geometry;
             BSONObj type;
@@ -293,6 +301,17 @@ namespace mongo
             bool is_command_geonear = false;
             bool is_type_polygon = false;
             bool is_type_point = false;
+
+            auto findCommand = query.getFindCommandRequest();
+
+            ClusterClientCursorParams params(
+                query.nss(), APIParameters::get(opCtx), readPref, repl::ReadConcernArgs::get(opCtx));
+            params.originatingCommandObj = CurOp::get(opCtx)->opDescription().getOwned();
+            params.batchSize = findCommand.getBatchSize();
+            params.tailableMode = query_request_helper::getTailableMode(findCommand);
+            params.isAllowPartialResults = findCommand.getAllowPartialResults();
+            params.lsid = opCtx->getLogicalSessionId();
+            params.txnNumber = opCtx->getTxnNumber();
 
             if (!filter.isEmpty() && columnName.compare(std::string(filter.firstElement().fieldName())) == 0 && filter.firstElement().isABSONObj())
             {
@@ -347,7 +366,7 @@ namespace mongo
              */
             if (is_registered && is_command_geowithin)
             {
-                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1);
+                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1, std::move(params));
                 //--------------------------------------------------------------------------
                 auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
                 int bytesBuffered = 0;
@@ -397,7 +416,7 @@ namespace mongo
             }
             if (is_registered && is_command_geointersects)
             {
-                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 0);
+                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 0, std::move(params));
                 //--------------------------------------------------------------------------
                 auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
                 int bytesBuffered = 0;
@@ -460,7 +479,7 @@ namespace mongo
                                                                   vv[0].Number(),
                                                                   vv[1].Number(),
                                                                   minDistance,
-                                                                  maxDistance);
+                                                                  maxDistance, std::move(params));
                 //--------------------------------------------------------------------------
                 auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
                 int bytesBuffered = 0;
@@ -509,7 +528,7 @@ namespace mongo
                 //--------------------------------------------------------------------------
             }
 
-            auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1);
+            auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1, std::move(params));
             //--------------------------------------------------------------------------
             auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
             int bytesBuffered = 0;
@@ -861,6 +880,8 @@ namespace mongo
 
         // RTree query
         StatusWith<CursorId> ClusterFind::runQuery(OperationContext *txn,
+                                                   const CanonicalQuery &query,
+                                                   const ReadPreferenceSetting &readPref,
                                                    const char *ns,
                                                    BSONObj &jsobj,
                                                    BSONObjBuilder &anObjBuilder,
@@ -870,7 +891,7 @@ namespace mongo
             // log()<<"entering runQuery()";
             invariant(results);
             auto cursorId = runQueryWithoutRetrying(
-                txn, ns, jsobj, anObjBuilder, queryOptions, results);
+                txn, ns, jsobj, query, readPref, anObjBuilder, queryOptions, results);
             if (cursorId.isOK())
             {
                 return cursorId;

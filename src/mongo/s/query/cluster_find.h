@@ -73,6 +73,8 @@ namespace mongo
          * Overload a runQuery to handle queries with rtree
          */
         static StatusWith<CursorId> runQuery(OperationContext *txn,
+                                             const CanonicalQuery &query,
+                                             const ReadPreferenceSetting &readPref,
                                              const char *ns,
                                              BSONObj &jsobj,
                                              BSONObjBuilder &anObjBuilder,
