@@ -247,8 +247,8 @@ namespace rtree_index
 		}
 		if (hasMore)
 		{
-		
-			return _DataIO->Basic_Fetch_AtomData(_DB_NAME, _COLLECTION_NAME, _Current_Target);
+
+			_DataIO->Basic_Fetch_AtomData(_DB_NAME, _COLLECTION_NAME, _Current_Target);
 		}
 		else
 		{

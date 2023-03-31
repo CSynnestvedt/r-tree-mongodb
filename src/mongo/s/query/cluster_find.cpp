@@ -250,15 +250,24 @@ namespace mongo
                 NumHostsTargetedMetrics::QueryType::kFindCmd, targetType);
         }
 
-        StatusWith<CursorId> runQueryWithoutRetrying(OperationContext *opCtx,
+        CursorId runQueryWithoutRetrying(OperationContext *opCtx,
                                                      const char *ns,
                                                      BSONObj &jsobj,
+                                                     const boost::optional<UUID> sampleId,
+                                                     const CollectionRoutingInfo &cri,
                                                      CanonicalQuery &query,
                                                      const ReadPreferenceSetting &readPref,
                                                      BSONObjBuilder &anObjBuilder,
-                                                     int queryOptions,
-                                                     std::vector<BSONObj> *results)
+                                                     std::vector<BSONObj> *results,
+                                                     bool *partialResultsReturned)
         {
+
+            const auto &cm = cri.cm;
+
+            auto findCommand = query.getFindCommandRequest();
+            // Get the set of shards on which we will run the query.
+            auto shardIds = getTargetedShardsForQuery(
+                query.getExpCtx(), cm, findCommand.getFilter(), findCommand.getCollation());
 
             /**
              * start to parse enough info for r-tree cursor and valid check
@@ -364,218 +373,248 @@ namespace mongo
              * we copy the code 3 times
              * hope there is a better way
              */
-            if (is_registered && is_command_geowithin)
+            int cursorMode = is_command_geowithin ? 1 : 0;
+            auto createCursorClientGuard = [&](int cursorMode, bool isCmdGeonear, bool isTypePoint)
             {
-                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1, std::move(params));
-                //--------------------------------------------------------------------------
-                auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
-                int bytesBuffered = 0;
-                int i = 20;
-                while (i > 0)
-                {
-                    auto next = ccc->next();
-                    if (!next.isOK())
-                    {
-                        return next.getStatus();
-                    }
-
-                    if (!next.getValue().getResult())
-                    {
-                        if (!ccc->isTailable() || ccc->remotesExhausted())
-                        {
-                            cursorState = ClusterCursorManager::CursorState::Exhausted;
-                        }
-                        break;
-                    }
-                    int sizeEstimate = bytesBuffered + next.getValue().getResult()->objsize() +
-                                       ((results->size() + 1U) * kPerDocumentOverheadBytesUpperBound);
-                    if (sizeEstimate > BSONObjMaxUserSize && !results->empty())
-                    {
-                        ccc->queueResult(*next.getValue().getResult());
-                        break;
-                    }
-                    BSONObj obj = std::move(*next.getValue().getResult());
-                    if (obj.isEmpty())
-                    {
-                        break;
-                    }
-                    bytesBuffered += next.getValue().getResult()->objsize();
-                    results->push_back(obj);
-                    --i;
-                }
-                auto cursorManager = grid.getCursorManager();
-                const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
-                const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
-                std::string nss_str = dbname + "." + jsobj.firstElement().String();
-                auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
-                StringData da(nss_str);
-                NamespaceString nss(da);
-                return cursorManager->registerCursor(
-                    opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
-                //--------------------------------------------------------------------------
-            }
-            if (is_registered && is_command_geointersects)
-            {
-                auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 0, std::move(params));
-                //--------------------------------------------------------------------------
-                auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
-                int bytesBuffered = 0;
-                int i = 20;
-                while (i > 0)
-                {
-                    auto next = ccc->next();
-                    if (!next.isOK())
-                    {
-                        return next.getStatus();
-                    }
-
-                    if (!next.getValue().getResult())
-                    {
-                        if (!ccc->isTailable() || ccc->remotesExhausted())
-                        {
-                            cursorState = ClusterCursorManager::CursorState::Exhausted;
-                        }
-                        break;
-                    }
-                    int sizeEstimate = bytesBuffered + next.getValue().getResult()->objsize() +
-                                       ((results->size() + 1U) * kPerDocumentOverheadBytesUpperBound);
-                    if (sizeEstimate > BSONObjMaxUserSize && !results->empty())
-                    {
-                        ccc->queueResult(*next.getValue().getResult());
-                        break;
-                    }
-                    BSONObj obj = std::move(*next.getValue().getResult());
-                    if (obj.isEmpty())
-                    {
-                        break;
-                    }
-                    bytesBuffered += next.getValue().getResult()->objsize();
-                    results->push_back(obj);
-                    --i;
-                }
-                auto cursorManager = grid.getCursorManager();
-                const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
-                const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
-                std::string nss_str = dbname + "." + jsobj.firstElement().String();
-                auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
-                StringData da(nss_str);
-                NamespaceString nss(da);
-                return cursorManager->registerCursor(
-                    opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
-                //--------------------------------------------------------------------------
-            }
-            else if (is_registered && is_command_geonear && is_type_point)
-            {
-                //  cout<<endl<<endl<<query_condition.jsonString();
-                BSONObj coords = query_condition["coordinates"].Obj();
-                // we parse the query_condition, the BSONObj will match the 1st answer, so the new appended field is matched
-
-                //  cout<<endl<<endl<<coords.jsonString();
+                if (isCmdGeonear && isTypePoint) {
+                    BSONObj coords = query_condition["coordinates"].Obj();
                 vector<BSONElement> vv;
                 coords.elems(vv);
-                auto ccc = RTreeNearClusterClientCursorImpl::make(opCtx,
+                return RTreeNearClusterClientCursorImpl::make(opCtx,
                                                                   dbname,
                                                                   collName,
                                                                   vv[0].Number(),
                                                                   vv[1].Number(),
                                                                   minDistance,
                                                                   maxDistance, std::move(params));
-                //--------------------------------------------------------------------------
-                auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
-                int bytesBuffered = 0;
-                int i = 20;
-                while (i > 0)
-                {
-                    auto next = ccc->next();
-                    if (!next.isOK())
-                    {
-                        return next.getStatus();
-                    }
-
-                    if (!next.getValue().getResult())
-                    {
-                        if (!ccc->isTailable() || ccc->remotesExhausted())
-                        {
-                            cursorState = ClusterCursorManager::CursorState::Exhausted;
-                        }
-                        break;
-                    }
-                    int sizeEstimate = bytesBuffered + next.getValue().getResult()->objsize() +
-                                       ((results->size() + 1U) * kPerDocumentOverheadBytesUpperBound);
-                    if (sizeEstimate > BSONObjMaxUserSize && !results->empty())
-                    {
-                        ccc->queueResult(*next.getValue().getResult());
-                        break;
-                    }
-                    BSONObj obj = std::move(*next.getValue().getResult());
-                    if (obj.isEmpty())
-                    {
-                        break;
-                    }
-                    bytesBuffered += next.getValue().getResult()->objsize();
-                    results->push_back(obj);
-                    --i;
                 }
-                auto cursorManager = grid.getCursorManager();
-                const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
-                const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
-                std::string nss_str = dbname + "." + jsobj.firstElement().String();
-                auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
-                StringData da(nss_str);
-                NamespaceString nss(da);
-                return cursorManager->registerCursor(
-                    opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
-                //--------------------------------------------------------------------------
+                return RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, cursorMode, std::move(params));
+                
+            };
+
+            auto establishCursorsOnShards = [&](const std::set<ShardId> &shardIds)
+            {
+                return establishCursors(
+                    opCtx,
+                    Grid::get(opCtx)->getExecutorPool()->getArbitraryExecutor(),
+                    query.nss(),
+                    readPref,
+                    // Construct the requests that we will use to establish cursors on the targeted shards,
+                    // attaching the shardVersion and txnNumber, if necessary.
+                    constructRequestsForShards(
+                        opCtx, cri, shardIds, query, sampleId, false),
+                    findCommand.getAllowPartialResults());
+            };
+
+            try
+            {
+                // Establish the cursors with a consistent shardVersion across shards.
+                params.remotes = establishCursorsOnShards(shardIds);
+            }
+            catch (const DBException &ex)
+            {
+                if (ex.code() == ErrorCodes::CollectionUUIDMismatch &&
+                    !ex.extraInfo<CollectionUUIDMismatchInfo>()->actualCollection() &&
+                    !shardIds.count(cm.dbPrimary()))
+                {
+                    // We received CollectionUUIDMismatchInfo but it does not contain the actual
+                    // namespace, and we did not attempt to establish a cursor on the primary shard.
+                    // Attempt to do so now in case the collection corresponding to the provided UUID is
+                    // unsharded. This should throw CollectionUUIDMismatchInfo, StaleShardVersion, or
+                    // StaleDbVersion.
+                    establishCursorsOnShards({cm.dbPrimary()});
+                    MONGO_UNREACHABLE;
+                }
+                throw;
             }
 
-            auto ccc = RTreeRangeClusterClientCursorImpl::make(opCtx, dbname, collName, query_condition, 1, std::move(params));
-            //--------------------------------------------------------------------------
-            auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
-            int bytesBuffered = 0;
-            int i = 20;
-            while (i > 0)
+            // Determine whether the cursor we may eventually register will be single- or multi-target.
+            const auto cursorType = params.remotes.size() > 1
+                                        ? ClusterCursorManager::CursorType::MultiTarget
+                                        : ClusterCursorManager::CursorType::SingleTarget;
+
+            // Only set skip, limit and sort to be applied to on the router for the multi-shard case. For
+            // the single-shard case skip/limit as well as sorts are appled on mongod.
+            if (cursorType == ClusterCursorManager::CursorType::MultiTarget)
             {
-                auto next = ccc->next();
-                if (!next.isOK())
+                params.skipToApplyOnRouter = findCommand.getSkip();
+                params.limit = findCommand.getLimit();
+                // params.sortToApplyOnRouter = sortComparatorObj;
+                // params.compareWholeSortKeyOnRouter = compareWholeSortKeyOnRouter;
+            }
+
+            auto ccc = createCursorClientGuard(cursorMode, is_command_geonear, is_type_point);
+            
+                        // Retrieve enough data from the ClusterClientCursor for the first batch of results.
+
+            FindCommon::waitInFindBeforeMakingBatch(opCtx, query);
+
+            // If we're allowing partial results and we got MaxTimeMSExpired, then temporarily disable
+            // interrupts in the opCtx so that we can pull already-fetched data from ClusterClientCursor.
+            bool ignoringInterrupts = false;
+            if (findCommand.getAllowPartialResults() &&
+                opCtx->checkForInterruptNoAssert().code() == ErrorCodes::MaxTimeMSExpired)
+            {
+                // MaxTimeMS is expired, but perhaps remotes not have expired their requests yet.
+                // Wait for all remote cursors to be exhausted so that we can safely disable interrupts
+                // in the opCtx.  We want to be sure that later calls to ccc->next() do not block on
+                // more data.
+
+                // Maximum number of 1ms sleeps to wait for remote cursors to be exhausted.
+                constexpr int kMaxAttempts = 10;
+                for (int remainingAttempts = kMaxAttempts; !ccc->remotesExhausted(); remainingAttempts--)
                 {
-                    return next.getStatus();
+                    if (!remainingAttempts)
+                    {
+                        LOGV2_DEBUG(
+                            5746900,
+                            0,
+                            "MaxTimeMSExpired error was seen on the router, but partial results cannot be "
+                            "returned because the remotes did not give the expected MaxTimeMS error within "
+                            "kMaxAttempts.");
+                        // Reveal the MaxTimeMSExpired error.
+                        opCtx->checkForInterrupt();
+                    }
+                    stdx::this_thread::sleep_for(stdx::chrono::milliseconds(1));
                 }
 
-                if (!next.getValue().getResult())
+                // The first MaxTimeMSExpired will have called opCtx->markKilled() so any later
+                // call to opCtx->checkForInterruptNoAssert() will return an error.  We need to
+                // temporarily ignore this while we pull data from the ClusterClientCursor.
+                LOGV2_DEBUG(
+                    5746901,
+                    0,
+                    "Attempting to return partial results because MaxTimeMS expired and the query set "
+                    "AllowPartialResults. Temporarily disabling interrupts on the OperationContext "
+                    "while partial results are pulled from the ClusterClientCursor.");
+                opCtx->setIgnoreInterruptsExceptForReplStateChange(true);
+                ignoringInterrupts = true;
+            }
+
+            auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
+            size_t bytesBuffered = 0;
+            // This loop will load enough results from the shards for a full first batch.  At first, these
+            // results come from the initial batches that were obtained when establishing cursors, but
+            // ClusterClientCursor::next will fetch further results if necessary.
+            while (!FindCommon::enoughForFirstBatch(findCommand, results->size()))
+            {
+                auto nextWithStatus = ccc->next();
+                if (findCommand.getAllowPartialResults() &&
+                    (nextWithStatus.getStatus() == ErrorCodes::MaxTimeMSExpired))
                 {
+                    if (ccc->remotesExhausted())
+                    {
+                        cursorState = ClusterCursorManager::CursorState::Exhausted;
+                        break;
+                    }
+                    // Continue because there may be results waiting from other remotes.
+                    continue;
+                }
+                else
+                {
+                    // all error statuses besides permissible remote timeouts should be returned to the user
+                    uassertStatusOK(nextWithStatus);
+                }
+                if (nextWithStatus.getValue().isEOF())
+                {
+                    // We reached end-of-stream. If the cursor is not tailable, then we mark it as
+                    // exhausted. If it is tailable, usually we keep it open (i.e. "NotExhausted") even
+                    // when we reach end-of-stream. However, if all the remote cursors are exhausted, there
+                    // is no hope of returning data and thus we need to close the mongos cursor as well.
                     if (!ccc->isTailable() || ccc->remotesExhausted())
                     {
                         cursorState = ClusterCursorManager::CursorState::Exhausted;
                     }
                     break;
                 }
-                int sizeEstimate = bytesBuffered + next.getValue().getResult()->objsize() +
-                                   ((results->size() + 1U) * kPerDocumentOverheadBytesUpperBound);
-                if (sizeEstimate > BSONObjMaxUserSize && !results->empty())
+
+                auto nextObj = *(nextWithStatus.getValue().getResult());
+
+                // If adding this object will cause us to exceed the message size limit, then we stash it
+                // for later.
+                if (!FindCommon::haveSpaceForNext(nextObj, results->size(), bytesBuffered))
                 {
-                    ccc->queueResult(*next.getValue().getResult());
+                    ccc->queueResult(nextObj);
                     break;
                 }
-                BSONObj obj = std::move(*next.getValue().getResult());
-                if (obj.isEmpty())
-                {
-                    break;
-                }
-                bytesBuffered += next.getValue().getResult()->objsize();
-                results->push_back(obj);
-                --i;
+
+                // Add doc to the batch. Account for the space overhead associated with returning this doc
+                // inside a BSON array.
+                bytesBuffered += (nextObj.objsize() + kPerDocumentOverheadBytesUpperBound);
+                results->push_back(std::move(nextObj));
             }
-            auto cursorManager = grid.getCursorManager();
-            const auto cursorType = ClusterCursorManager::CursorType::MultiTarget;
-            const auto cursorLifetime = ClusterCursorManager::CursorLifetime::Immortal;
+
+            if (ignoringInterrupts)
+            {
+                opCtx->setIgnoreInterruptsExceptForReplStateChange(false);
+                ignoringInterrupts = false;
+                LOGV2_DEBUG(5746902, 0, "Re-enabled interrupts on the OperationContext.");
+            }
+
+            // Surface any opCtx interrupts, except ignore MaxTimeMSExpired with allowPartialResults.
+            auto interruptStatus = opCtx->checkForInterruptNoAssert();
+            if (!(interruptStatus.code() == ErrorCodes::MaxTimeMSExpired &&
+                  findCommand.getAllowPartialResults()))
+            {
+                uassertStatusOK(interruptStatus);
+            }
+
+            ccc->detachFromOperationContext();
+
+            if (findCommand.getSingleBatch() && !ccc->isTailable())
+            {
+                cursorState = ClusterCursorManager::CursorState::Exhausted;
+            }
+
+            // Fill out query exec properties.
+            CurOp::get(opCtx)->debug().nShards = ccc->getNumRemotes();
+            CurOp::get(opCtx)->debug().nreturned = results->size();
+
+            // If the caller wants to know whether the cursor returned partial results, set it here.
+            if (partialResultsReturned)
+            {
+                // Missing results can come either from the first batches or from the ccc's later batches.
+                *partialResultsReturned = ccc->partialResultsReturned();
+            }
+
+            // If the cursor is exhausted, then there are no more results to return and we don't need to
+            // allocate a cursor id.
+            if (cursorState == ClusterCursorManager::CursorState::Exhausted)
+            {
+                CurOp::get(opCtx)->debug().cursorExhausted = true;
+
+                if (shardIds.size() > 0)
+                {
+                    updateNumHostsTargetedMetrics(opCtx, cm, shardIds.size());
+                }
+                return CursorId(0);
+            }
+
+            // Register the cursor with the cursor manager for subsequent getMore's.
+
+            auto cursorManager = Grid::get(opCtx)->getCursorManager();
+            const auto cursorLifetime = findCommand.getNoCursorTimeout()
+                                            ? ClusterCursorManager::CursorLifetime::Immortal
+                                            : ClusterCursorManager::CursorLifetime::Mortal;
             auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
-            std::string nss_str = dbname + "." + jsobj.firstElement().String();
-            StringData da(nss_str);
-            NamespaceString nss(da);
-            return cursorManager->registerCursor(
-                opCtx, ccc.releaseCursor(), nss, cursorType, cursorLifetime, authUser);
-            //--------------------------------------------------------------------------
+            ccc->incNBatches();
+
+            auto cursorId = uassertStatusOK(cursorManager->registerCursor(
+                opCtx, ccc.releaseCursor(), query.nss(), cursorType, cursorLifetime, authUser));
+
+            // Record the cursorID in CurOp.
+            CurOp::get(opCtx)->debug().cursorid = cursorId;
+
+            if (shardIds.size() > 0)
+            {
+                updateNumHostsTargetedMetrics(opCtx, cm, shardIds.size());
+            }
+
+            return cursorId;
+                //--------------------------------------------------------------------------
+            
         }
+
 
         CursorId runQueryWithoutRetrying(OperationContext *opCtx,
                                          const CanonicalQuery &query,
@@ -879,33 +918,193 @@ namespace mongo
         }
 
         // RTree query
-        StatusWith<CursorId> ClusterFind::runQuery(OperationContext *opCtx,
+        const size_t ClusterFind::kMaxRetries = 10;
+        CursorId ClusterFind::runQuery(OperationContext *opCtx,
                                                    const char *ns,
                                                    BSONObj &jsobj,
                                                    CanonicalQuery &query,
                                                    const ReadPreferenceSetting &readPref,
                                                    BSONObjBuilder &anObjBuilder,
-                                                   int queryOptions,
-                                                   std::vector<BSONObj> *results)
+                                                   std::vector<BSONObj> *results,
+                                                   bool *partialResultsReturned)
         {
-            // log()<<"entering runQuery()";
+            CurOp::get(opCtx)->debug().queryHash = canonical_query_encoder::computeHash(query.encodeKey());
+
+            // If the user supplied a 'partialResultsReturned' out-parameter, default it to false here.
+            if (partialResultsReturned)
+            {
+                *partialResultsReturned = false;
+            }
+
+            // We must always have a BSONObj vector into which to output our results.
             invariant(results);
-            auto cursorId = runQueryWithoutRetrying(opCtx, ns, jsobj, query, readPref, anObjBuilder, queryOptions, results);
 
-            if (cursorId.isOK())
+            auto findCommand = query.getFindCommandRequest();
+            // Projection on the reserved sort key field is illegal in mongos.
+            if (findCommand.getProjection().hasField(AsyncResultsMerger::kSortKeyField))
             {
-                return cursorId;
+                uasserted(ErrorCodes::BadValue,
+                        str::stream() << "Projection contains illegal field '"
+                                        << AsyncResultsMerger::kSortKeyField
+                                        << "': " << findCommand.getProjection());
             }
-            auto status = std::move(cursorId.getStatus());
 
-            if (!ErrorCodes::isStaleShardVersionError(status.code()))
+            // Attempting to establish a resumable query through mongoS is illegal.
+            uassert(ErrorCodes::BadValue,
+                    "Queries on mongoS may not request or provide a resume token",
+                    !findCommand.getRequestResumeToken() && findCommand.getResumeAfter().isEmpty());
+
+            auto const catalogCache = Grid::get(opCtx)->catalogCache();
+            // Try to generate a sample id for this query here instead of inside 'runQueryWithoutRetrying()'
+            // since it is incorrect to generate multiple sample ids for a single query.
+            const auto sampleId = analyze_shard_key::tryGenerateSampleId(opCtx, query.nss());
+
+            // Re-target and re-send the initial find command to the shards until we have established the
+            // shard version.
+            for (size_t retries = 1; retries <= kMaxRetries; ++retries)
             {
-                // Errors other than receiving a stale metadata message from MongoD are fatal to the
-                // operation. Network errors and replication retries happen at the level of the
-                // AsyncResultsMerger.
-                return status;
+                auto swCri = getCollectionRoutingInfoForTxnCmd(opCtx, query.nss());
+                if (swCri == ErrorCodes::NamespaceNotFound)
+                {
+                    uassert(CollectionUUIDMismatchInfo(query.nss().dbName(),
+                                                    *findCommand.getCollectionUUID(),
+                                                    query.nss().coll().toString(),
+                                                    boost::none),
+                            "Database does not exist",
+                            !findCommand.getCollectionUUID());
+
+                    // If the database doesn't exist, we successfully return an empty result set without
+                    // creating a cursor.
+                    return CursorId(0);
+                }
+
+                const auto cri = uassertStatusOK(std::move(swCri));
+
+                try
+                {
+                    return runQueryWithoutRetrying(
+                                                     opCtx,
+                                                     ns,
+                                                     jsobj,
+                                                     sampleId,
+                                                     cri,
+                                                     query,
+                                                     readPref,
+                                                     anObjBuilder,
+                                                     results,
+                                                     partialResultsReturned);
+                }
+                catch (ExceptionFor<ErrorCodes::StaleDbVersion> &ex)
+                {
+                    if (retries >= kMaxRetries)
+                    {
+                        // Check if there are no retries remaining, so the last received error can be
+                        // propagated to the caller.
+                        ex.addContext(str::stream()
+                                    << "Failed to run query after " << kMaxRetries << " retries");
+                        throw;
+                    }
+
+                    LOGV2_DEBUG(22839,
+                                1,
+                                "Received error status for query",
+                                "query"_attr = redact(query.toStringShort()),
+                                "attemptNumber"_attr = retries,
+                                "maxRetries"_attr = kMaxRetries,
+                                "error"_attr = redact(ex));
+
+                    // Mark database entry in cache as stale.
+                    Grid::get(opCtx)->catalogCache()->onStaleDatabaseVersion(ex->getDb(),
+                                                                            ex->getVersionWanted());
+
+                    if (auto txnRouter = TransactionRouter::get(opCtx))
+                    {
+                        if (!txnRouter.canContinueOnStaleShardOrDbError(kFindCmdName, ex.toStatus()))
+                        {
+                            throw;
+                        }
+
+                        // Reset the default global read timestamp so the retry's routing table reflects the
+                        // chunk placement after the refresh (no-op if the transaction is not running with
+                        // snapshot read concern).
+                        txnRouter.onStaleShardOrDbError(opCtx, kFindCmdName, ex.toStatus());
+                        txnRouter.setDefaultAtClusterTime(opCtx);
+                    }
+                }
+                catch (DBException &ex)
+                {
+                    if (retries >= kMaxRetries)
+                    {
+                        // Check if there are no retries remaining, so the last received error can be
+                        // propagated to the caller.
+                        ex.addContext(str::stream()
+                                    << "Failed to run query after " << kMaxRetries << " retries");
+                        throw;
+                    }
+                    else if (!ErrorCodes::isStaleShardVersionError(ex.code()) &&
+                            ex.code() != ErrorCodes::ShardInvalidatedForTargeting &&
+                            ex.code() != ErrorCodes::ShardNotFound)
+                    {
+
+                        if (ErrorCodes::isRetriableError(ex.code()))
+                        {
+                            ex.addContext("Encountered retryable error during query");
+                        }
+                        else
+                        {
+                            // Errors other than stale metadata or from trying to reach a non existent shard
+                            // are fatal to the operation. Network errors and replication retries happen at
+                            // the level of the AsyncResultsMerger.
+                            ex.addContext("Encountered non-retryable error during query");
+                        }
+                        throw;
+                    }
+
+                    LOGV2_DEBUG(22840,
+                                1,
+                                "Received error status for query",
+                                "query"_attr = redact(query.toStringShort()),
+                                "attemptNumber"_attr = retries,
+                                "maxRetries"_attr = kMaxRetries,
+                                "error"_attr = redact(ex));
+
+                    if (ex.code() != ErrorCodes::ShardInvalidatedForTargeting)
+                    {
+                        if (auto staleInfo = ex.extraInfo<StaleConfigInfo>())
+                        {
+                            catalogCache->invalidateShardOrEntireCollectionEntryForShardedCollection(
+                                query.nss(), staleInfo->getVersionWanted(), staleInfo->getShardId());
+                        }
+                        else
+                        {
+                            catalogCache->invalidateCollectionEntry_LINEARIZABLE(query.nss());
+                        }
+                    }
+
+                    catalogCache->setOperationShouldBlockBehindCatalogCacheRefresh(opCtx, true);
+
+                    if (auto txnRouter = TransactionRouter::get(opCtx))
+                    {
+                        if (!txnRouter.canContinueOnStaleShardOrDbError(kFindCmdName, ex.toStatus()))
+                        {
+                            if (ex.code() == ErrorCodes::ShardInvalidatedForTargeting)
+                            {
+                                (void)catalogCache->getCollectionPlacementInfoWithRefresh(opCtx,
+                                                                                        query.nss());
+                            }
+                            throw;
+                        }
+
+                        // Reset the default global read timestamp so the retry's routing table reflects the
+                        // chunk placement after the refresh (no-op if the transaction is not running with
+                        // snapshot read concern).
+                        txnRouter.onStaleShardOrDbError(opCtx, kFindCmdName, ex.toStatus());
+                        txnRouter.setDefaultAtClusterTime(opCtx);
+                    }
+                }
             }
-            return CursorId(0);
+
+            MONGO_UNREACHABLE
         }
 
         /**

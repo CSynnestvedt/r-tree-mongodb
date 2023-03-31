@@ -159,7 +159,7 @@ namespace mongo
             ++_numReturnedSoFar;
         }
 
-        return next;
+        return ClusterQueryResult(next);
     }
 
     void RTreeNearClusterClientCursorImpl::kill(OperationContext *opCtx)

@@ -72,14 +72,14 @@ namespace mongo
         /**
          * Overload a runQuery to handle queries with rtree
          */
-        static StatusWith<CursorId> runQuery(OperationContext *opCtx,
+        static CursorId runQuery(OperationContext *opCtx,
                                              const char *ns,
                                              BSONObj &jsobj,
                                              CanonicalQuery &query,
                                              const ReadPreferenceSetting &readPref,
                                              BSONObjBuilder &anObjBuilder,
-                                             int queryOptions,
-                                             std::vector<BSONObj> *results);
+                                             std::vector<BSONObj> *results,
+                                             bool *partialResultsReturned = nullptr);
 
         /**
          * Executes the getMore command 'cmd', and on success returns a CursorResponse.

@@ -174,7 +174,7 @@ namespace mongo
                 _rtreeRangeQueryCursor->FreeCursor();
             }
         }
-        return next;
+        return ClusterQueryResult(next);
     }
 
     void RTreeRangeClusterClientCursorImpl::kill(OperationContext *opCtx)
