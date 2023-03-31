@@ -1,29 +1,29 @@
 /**
-*    Copyright (C) 2015 LIESMARS, Wuhan University.
-*    Financially supported by Wuda Geoinfamatics Co. ,Ltd.
-*    Author:  Xiang Longgang, Wang Dehao , Shao Xiaotian
-*
-*    This program is free software: you can redistribute it and/or  modify
-*    it under the terms of the GNU Affero General Public License, version 3,
-*    as published by the Free Software Foundation.
-*
-*    This program is distributed in the hope that it will be useful,
-*    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*    GNU Affero General Public License for more details.
-*
-*    You should have received a copy of the GNU Affero General Public License
-*    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ *    Copyright (C) 2015 LIESMARS, Wuhan University.
+ *    Financially supported by Wuda Geoinfamatics Co. ,Ltd.
+ *    Author:  Xiang Longgang, Wang Dehao , Shao Xiaotian
+ *
+ *    This program is free software: you can redistribute it and/or  modify
+ *    it under the terms of the GNU Affero General Public License, version 3,
+ *    as published by the Free Software Foundation.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Affero General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Affero General Public License
+ *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include "mongo_geometry_parser.h"
 
 namespace geometry_parser
 {
-    int geometry_parser::MongoGeometryParser::DataType2Polygon(BSONObj GeometryData, geom::Polygon* &returnPolygon)
+	int geometry_parser::MongoGeometryParser::DataType2Polygon(BSONObj GeometryData, geom::Polygon *&returnPolygon)
 	{
-		LinearRing* shellRing = NULL;
-		std::vector<LinearRing*> *holes = new std::vector<LinearRing*>();
+		LinearRing *shellRing = NULL;
+		std::vector<LinearRing *> *holes = new std::vector<LinearRing *>();
 		if (!GeometryData.hasField("coordinates"))
 		{
 			delete shellRing;
@@ -31,7 +31,7 @@ namespace geometry_parser
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
 		BSONObj coordinateObj = GeometryData["coordinates"].Obj();
-		vector<BSONElement>LL;
+		vector<BSONElement> LL;
 		coordinateObj.elems(LL);
 		if (LL.size() < 1)
 		{
@@ -42,7 +42,7 @@ namespace geometry_parser
 		for (unsigned int j = 0; j < LL.size(); j++)
 		{
 			BSONObj oneRing = LL[j].Obj();
-			vector<BSONElement>L;
+			vector<BSONElement> L;
 			oneRing.elems(L);
 			if (L.size() < 4)
 			{
@@ -56,14 +56,13 @@ namespace geometry_parser
 			for (unsigned int i = 0; i < L.size(); i++)
 			{
 				BSONObj arrobj = L[i].Obj();
-				vector<BSONElement>coord;
+				vector<BSONElement> coord;
 				arrobj.elems(coord);
 				if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
 				{
 					double x = coord[0].numberDouble();
 					double y = coord[1].numberDouble();
 					cs->setAt(PT(x, y, 0), i);
-
 				}
 				else
 				{
@@ -79,7 +78,7 @@ namespace geometry_parser
 			/*if exist holes*/
 			else
 			{
-				LinearRing* oneHole = factory.get()->createLinearRing(cs.get());
+				LinearRing *oneHole = factory.get()->createLinearRing(cs.get());
 				holes->push_back(oneHole);
 			}
 		}
@@ -93,32 +92,31 @@ namespace geometry_parser
 		return GEOM_PARSE_SUCCESS;
 	}
 
-	int geometry_parser::MongoGeometryParser::DataType2LineString(BSONObj GeometryData, LineString* &returnLinerString)
+	int geometry_parser::MongoGeometryParser::DataType2LineString(BSONObj GeometryData, LineString *&returnLinerString)
 	{
 		if (!GeometryData.hasField("coordinates"))
 		{
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
 		BSONObj coordinateObj = GeometryData["coordinates"].Obj();
-		vector<BSONElement>L;
+		vector<BSONElement> L;
 		coordinateObj.elems(L);
 		if (L.size() < 2)
 		{
 			return GEOM_INVALID_NO_ENOUGH_POINT_IN_LINESTRING;
 		}
 		/*new here*/
-		CoordinateSequence::Ptr cs = csf -> create(L.size(), 2);
+		CoordinateSequence::Ptr cs = csf->create(L.size(), 2);
 		for (unsigned int i = 0; i < L.size(); i++)
 		{
 			BSONObj arrobj = L[i].Obj();
-			vector<BSONElement>coord;
+			vector<BSONElement> coord;
 			arrobj.elems(coord);
 			if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
 			{
 				double x = coord[0].numberDouble();
 				double y = coord[1].numberDouble();
 				cs->setAt(PT(x, y, 0), i);
-
 			}
 			else
 			{
@@ -137,14 +135,14 @@ namespace geometry_parser
 		return false;
 	}
 
-	int geometry_parser::MongoGeometryParser::DataType2Point(BSONObj GeometryData, Point * &returnPoint)
+	int geometry_parser::MongoGeometryParser::DataType2Point(BSONObj GeometryData, geom::Point *&returnPoint)
 	{
 		if (!GeometryData.hasField("coordinates"))
 		{
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
 		BSONObj coordinates = GeometryData["coordinates"].Obj();
-		vector<BSONElement>coord;
+		vector<BSONElement> coord;
 		coordinates.elems(coord);
 		if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
 		{
@@ -156,14 +154,14 @@ namespace geometry_parser
 		return GEOM_INVALID_GEOJSON_FORMAT;
 	}
 
-	int  geometry_parser::MongoGeometryParser::DataType2MutiLineString(BSONObj GeometryData, MultiLineString * &returnMutiLineString)
+	int geometry_parser::MongoGeometryParser::DataType2MutiLineString(BSONObj GeometryData, MultiLineString *&returnMutiLineString)
 	{
 		if (!GeometryData.hasField("coordinates"))
 		{
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
 		BSONObj coordinateObj = GeometryData["coordinates"].Obj();
-		vector<BSONElement>LL;
+		vector<BSONElement> LL;
 		coordinateObj.elems(LL);
 		if (LL.size() < 1)
 		{
@@ -174,7 +172,7 @@ namespace geometry_parser
 		for (unsigned int j = 0; j < LL.size(); j++)
 		{
 			BSONObj oneRing = LL[j].Obj();
-			vector<BSONElement>L;
+			vector<BSONElement> L;
 			oneRing.elems(L);
 			if (L.size() < 2)
 			{
@@ -186,14 +184,13 @@ namespace geometry_parser
 			for (unsigned int i = 0; i < L.size(); i++)
 			{
 				BSONObj arrobj = L[i].Obj();
-				vector<BSONElement>coord;
+				vector<BSONElement> coord;
 				arrobj.elems(coord);
 				if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
 				{
 					double x = coord[0].numberDouble();
 					double y = coord[1].numberDouble();
 					cs->setAt(PT(x, y, 0), i);
-
 				}
 				else
 				{
@@ -212,17 +209,16 @@ namespace geometry_parser
 		*/
 		returnMutiLineString = factory.get()->createMultiLineString(LineStrings);
 		return GEOM_PARSE_SUCCESS;
-
 	}
 
-	int geometry_parser::MongoGeometryParser::DataType2MutiPoint(BSONObj GeometryData, MultiPoint * &returnMutiPoint)
+	int geometry_parser::MongoGeometryParser::DataType2MutiPoint(BSONObj GeometryData, MultiPoint *&returnMutiPoint)
 	{
 		if (!GeometryData.hasField("coordinates"))
 		{
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
 		BSONObj coordinateObj = GeometryData["coordinates"].Obj();
-		vector<BSONElement>L;
+		vector<BSONElement> L;
 		coordinateObj.elems(L);
 		if (L.size() < 1)
 		{
@@ -233,7 +229,7 @@ namespace geometry_parser
 		for (unsigned int i = 0; i < L.size(); i++)
 		{
 			BSONObj arrobj = L[i].Obj();
-			vector<BSONElement>coord;
+			vector<BSONElement> coord;
 			arrobj.elems(coord);
 			if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
 			{
@@ -259,14 +255,14 @@ namespace geometry_parser
 		return false;
 	}
 
-	int geometry_parser::MongoGeometryParser::DataType2MutiPolygon(BSONObj GeometryData, MultiPolygon * &returnMutiPolygon)
+	int geometry_parser::MongoGeometryParser::DataType2MutiPolygon(BSONObj GeometryData, MultiPolygon *&returnMutiPolygon)
 	{
 		if (!GeometryData.hasField("coordinates"))
 		{
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
 		BSONObj TotalData = GeometryData["coordinates"].Obj();
-		vector<BSONElement>LLL;
+		vector<BSONElement> LLL;
 		TotalData.elems(LLL);
 		if (LLL.size() < 1)
 		{
@@ -277,7 +273,7 @@ namespace geometry_parser
 		for (unsigned int k = 0; k < LLL.size(); k++)
 		{
 			BSONObj onePolygon = LLL[k].Obj();
-			vector<BSONElement>LL;
+			vector<BSONElement> LL;
 			onePolygon.elems(LL);
 			if (LL.size() < 1)
 			{
@@ -285,13 +281,13 @@ namespace geometry_parser
 				return GEOM_INVALID_GEOJSON_FORMAT;
 			}
 			/*new here*/
-			LinearRing* shellRing = NULL;
+			LinearRing *shellRing = NULL;
 			/*new here*/
-			std::vector<LinearRing*>  *holes = new std::vector<LinearRing*>();
+			std::vector<LinearRing *> *holes = new std::vector<LinearRing *>();
 			for (unsigned int j = 0; j < LL.size(); j++)
 			{
 				BSONObj oneRing = LL[j].Obj();
-				vector<BSONElement>L;
+				vector<BSONElement> L;
 				oneRing.elems(L);
 				if (L.size() < 4)
 				{
@@ -305,14 +301,13 @@ namespace geometry_parser
 				for (unsigned int i = 0; i < L.size(); i++)
 				{
 					BSONObj arrobj = L[i].Obj();
-					vector<BSONElement>coord;
+					vector<BSONElement> coord;
 					arrobj.elems(coord);
 					if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
 					{
 						double x = coord[0].numberDouble();
 						double y = coord[1].numberDouble();
 						cs->setAt(PT(x, y, 0), i);
-
 					}
 					else
 					{
@@ -329,13 +324,12 @@ namespace geometry_parser
 				/*if exist holes*/
 				else
 				{
-					LinearRing* oneHole = factory.get()->createLinearRing(cs.get());
+					LinearRing *oneHole = factory.get()->createLinearRing(cs.get());
 					holes->push_back(oneHole);
 				}
 			}
-			geom::Geometry * singlePolygon = factory.get()->createPolygon(shellRing, holes);
+			geom::Geometry *singlePolygon = factory.get()->createPolygon(shellRing, holes);
 			Polygons->push_back(singlePolygon);
-
 		}
 		/*
 		Pay attention to memory leak here!
@@ -345,11 +339,9 @@ namespace geometry_parser
 		*/
 		returnMutiPolygon = factory.get()->createMultiPolygon(Polygons);
 		return GEOM_PARSE_SUCCESS;
-
-
 	}
 
-	int geometry_parser::MongoGeometryParser::DataType2GeometryCollection(BSONObj GeometryData, GeometryCollection * &returnGeometryCollection)
+	int geometry_parser::MongoGeometryParser::DataType2GeometryCollection(BSONObj GeometryData, GeometryCollection *&returnGeometryCollection)
 	{
 		if (!GeometryData.hasField("geometries"))
 		{
@@ -473,10 +465,6 @@ namespace geometry_parser
 		}
 		returnGeometryCollection = factory.get()->createGeometryCollection(Geometrys);
 		return GEOM_PARSE_SUCCESS;
-
-
-
-
 	}
 
 	int geometry_parser::MongoGeometryParser::DataType2Geometry(BSONObj GeometryData, geom::Geometry *&returnGeometry)
@@ -492,7 +480,6 @@ namespace geometry_parser
 			int returnValue = DataType2Point(GeometryData, pgeo);
 			returnGeometry = pgeo;
 			return returnValue;
-
 		}
 		if (typeString == "LineString")
 		{
