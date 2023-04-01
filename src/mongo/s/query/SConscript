@@ -58,6 +58,7 @@ env.Library(
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/shared_request_handling',
+        '$BUILD_DIR/mongo/s/rtree/rtreeindex',
         'router_exec_stage',
     ],
 )

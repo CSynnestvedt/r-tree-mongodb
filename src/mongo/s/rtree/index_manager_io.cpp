@@ -20,7 +20,8 @@
 #include "mongo/s/catalog/type_indexmetadata.h"
 #include "mongo/s/catalog/type_geometadata.h"
 #include "write_op.h"
-#include "mongo/db/s/config/sharding_catalog_manager.h"
+#include "mongo/s/client/shard_registry.h"
+#include "mongo/s/grid.h"
 
 #define MONGO_LOGV2_DEFAULT_COMPONENT ::mongo::logv2::LogComponent::kDefault
 #include "mongo/logv2/log.h"
@@ -149,7 +150,7 @@ namespace index_manager
         uassertStatusOK(status.getStatus());
 
 		//DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
-		BSONObj oneGeoMeta = ShardingCatalogManager::get(txn)->getGeometry(txn, bdr.obj());
+		BSONObj oneGeoMeta = Grid::get(txn)->shardRegistry()->getGeometry(txn, bdr.obj());
 
 		if (oneGeoMeta.isEmpty())
 		{
@@ -204,7 +205,7 @@ namespace index_manager
         //auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
         uassertStatusOK(status.getStatus());
-        ShardingCatalogManager::get(txn)->registerGeometry(txn, bdr.obj());
+        Grid::get(txn)->shardRegistry()->registerGeometry(txn, bdr.obj());
 		// DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
 	    // conf->registerGeometry(txn,bdr.obj());
 		return 1;
@@ -217,7 +218,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
         uassertStatusOK(status.getStatus());
-		ShardingCatalogManager::get(txn)->deleteGeometry(txn, querybdr.obj());
+		Grid::get(txn)->shardRegistry()->deleteGeometry(txn, querybdr.obj());
         // shared_ptr<DBConfig> conf = status.getValue();
 		//DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
 		// conf->deleteGeometry(txn,querybdr.obj());
@@ -241,7 +242,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
         uassertStatusOK(status.getStatus());
-        auto conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		conf->updateGeometry(txn,condition.obj(), setBuilder.obj());
 		/*updata*/
 		//_conn->update(_dbName + "." + GeoMeteDataName, Query(condition.obj()), setBuilder.obj());
@@ -279,7 +280,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
         uassertStatusOK(status.getStatus());
-		ShardingCatalogManager::get(txn)->updateGeometry(txn, condition.obj(), setBuilder.obj());
+		Grid::get(txn)->shardRegistry()->updateGeometry(txn, condition.obj(), setBuilder.obj());
 
         // shared_ptr<DBConfig> conf = status.getValue();
 		// conf->updateGeometry(txn,condition.obj(), setBuilder.obj());
@@ -303,7 +304,7 @@ namespace index_manager
 
 		//shared_ptr<DBConfig> conf =
         //        uassertStatusOK(grid.catalogCache()->getDatabase(txn, DB_NAME));
-		return ShardingCatalogManager::get(txn)->checkGeoExist(txn, bdr.obj());
+		return Grid::get(txn)->shardRegistry()->checkGeoExist(txn, bdr.obj());
 	}
 
 	int MongoIndexManagerIO::RTree_StorageIndexMeteData(Transaction* t,string STORAGE_NAME, int MAX_NODE, int MAX_LEAF, mongo::OID RootKey)
@@ -319,7 +320,7 @@ namespace index_manager
 
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());
-        ShardingCatalogManager* conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		conf->insertIndexMetadata(txn,bdr.obj());
 		t->InsertDone(0, "config.meta_rtree", rtree_index::INSERT, "insertIndexMetadata");
 		Basic_ModifyIndexMeteDataKey(txn, DB_NAME,STORAGE_NAME, Index_INFO_OID);
@@ -338,7 +339,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());
-        ShardingCatalogManager* conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		BSONObj Geo = conf->getGeometry(txn,bdr.obj());
 		//BSONObj Geo = _conn->findOne(DB_NAME+"."+GeoMeteDataName,bdr.obj());
 		//log() << "Geoooooo:" << Geo << endl;
@@ -370,7 +371,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());
-        ShardingCatalogManager* conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		BSONObj Geo = conf->getGeometry(txn,bdr.obj());
 
 		BSONObjBuilder condition;
@@ -404,7 +405,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());
-        ShardingCatalogManager* conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		BSONObj Geo = conf->getGeometry(txn,bdr.obj());
 
 		BSONObjBuilder condition;
@@ -442,7 +443,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());;
-        ShardingCatalogManager* conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		return conf->checkRtreeExist(txn,bdr.obj());
 	}
 
@@ -507,7 +508,7 @@ namespace index_manager
 		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());
-        ShardingCatalogManager* conf = ShardingCatalogManager::get(txn);
+        auto conf = Grid::get(txn)->shardRegistry();
 		BSONObj oneGeoMetaData = conf->getGeometry(txn,bdr.obj());
 		_COLUMN_NAME = oneGeoMetaData["column_name"].String();
 	}

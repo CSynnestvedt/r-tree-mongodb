@@ -252,12 +252,11 @@ namespace mongo
 
         CursorId runQueryWithoutRetrying(OperationContext *opCtx,
                                                      const NamespaceString nss,
-                                                     BSONObj &jsobj,
+                                                     const BSONObj &jsobj,
                                                      const boost::optional<UUID> sampleId,
                                                      const CollectionRoutingInfo &cri,
                                                      CanonicalQuery &query,
                                                      const ReadPreferenceSetting &readPref,
-                                                     BSONObjBuilder &anObjBuilder,
                                                      std::vector<BSONObj> *results,
                                                      bool *partialResultsReturned)
         {
@@ -277,13 +276,13 @@ namespace mongo
              */
 
             // log()<<"entering runQueryWithoutRetrying";
-            BSONElement e = jsobj.firstElement();
+            // jsobj.firstElement gives {command: collection} given something like this
+            // {insert: "locations"}
+            std::string commandName = jsobj.firstElementFieldName();
             std::string dbname = nss.dbName().db();
-            std::string collName = e.String();
+            std::string collName = jsobj[commandName];
             std::string columnName;
             BSONObj query_condition;
-            std::string commandName = e.fieldName();
-            Grid grid;
 
             BSONObjBuilder bdr;
             bdr.append("datanamespace", dbname + "." + collName);
@@ -295,7 +294,7 @@ namespace mongo
             uassertStatusOK(status.getStatus());
 
             // DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
-            BSONObj geometadata = ShardingCatalogManager::get(opCtx)->getGeometry(opCtx, bdr.obj());
+            BSONObj geometadata = Grid::get(opCtx)->shardRegistry()->getGeometry(opCtx, bdr.obj());
             columnName = geometadata["column_name"].str();
             BSONElement geowithincomm;
             BSONObj geometry;
@@ -311,8 +310,6 @@ namespace mongo
             bool is_type_polygon = false;
             bool is_type_point = false;
 
-            auto findCommand = query.getFindCommandRequest();
-
             ClusterClientCursorParams params(
                 query.nss(), APIParameters::get(opCtx), readPref, repl::ReadConcernArgs::get(opCtx));
             params.originatingCommandObj = CurOp::get(opCtx)->opDescription().getOwned();
@@ -321,7 +318,8 @@ namespace mongo
             params.isAllowPartialResults = findCommand.getAllowPartialResults();
             params.lsid = opCtx->getLogicalSessionId();
             params.txnNumber = opCtx->getTxnNumber();
-
+            
+            // {filter: {0: "theFilterValue"}}
             if (!filter.isEmpty() && columnName.compare(std::string(filter.firstElement().fieldName())) == 0 && filter.firstElement().isABSONObj())
             {
                 is_registered = true; // we find the geometadata in config server
@@ -983,15 +981,13 @@ namespace mongo
     // RTree query
         CursorId ClusterFind::runQuery(OperationContext *opCtx,
                                                    const NamespaceString nss,
-                                                   BSONObj &jsobj,
+                                                   const BSONObj &jsobj,
                                                    CanonicalQuery &query,
                                                    const ReadPreferenceSetting &readPref,
-                                                   BSONObjBuilder &anObjBuilder,
                                                    std::vector<BSONObj> *results,
                                                    bool *partialResultsReturned)
         {
             CurOp::get(opCtx)->debug().queryHash = canonical_query_encoder::computeHash(query.encodeKey());
-
             // If the user supplied a 'partialResultsReturned' out-parameter, default it to false here.
             if (partialResultsReturned)
             {
@@ -1052,7 +1048,6 @@ namespace mongo
                                                      cri,
                                                      query,
                                                      readPref,
-                                                     anObjBuilder,
                                                      results,
                                                      partialResultsReturned);
                 }

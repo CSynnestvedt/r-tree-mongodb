@@ -32,7 +32,7 @@
 
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/commands.h"
-#include "mongo/db/s/config/sharding_catalog_manager.h"
+#include "mongo/s/client/shard_registry.h"
 #include "mongo/logv2/log.h"
 #include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/s/cluster_commands_helpers.h"
@@ -130,7 +130,7 @@ public:
         //auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
         auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName.db());
         uassertStatusOK(status.getStatus());
-        auto conf = ShardingCatalogManager::get(opCtx);
+        auto conf = Grid::get(opCtx)->shardRegistry();
 
         BSONObjBuilder bdr;
         bdr.append("datanamespace", dbName.db()+"."+cmdObj["deleteIndexes"].str());

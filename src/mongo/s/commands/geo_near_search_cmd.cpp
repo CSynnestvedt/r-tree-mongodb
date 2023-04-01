@@ -37,10 +37,7 @@
 #include "mongo/logv2/log.h"
 #include "mongo/s/cluster_commands_helpers.h"
 #include "mongo/s/grid.h"
-#include "mongo/s/rtree/rtree_cursor.h"
-#include "mongo/s/rtree/rtree_globle.h"
-#include "mongo/s/rtree/rtree_geonear_cursor.h"
-
+#include "mongo/s/query/cluster_find.h"
 
 
 #define MONGO_LOGV2_DEFAULT_COMPONENT ::mongo::logv2::LogComponent::kCommand
@@ -86,105 +83,25 @@ public:
             const BSONObj& cmdObj,
             BSONObjBuilder& result
     ) {
+        bool apiStrict = APIParameters::get(opCtx).getAPIStrict().value_or(false);
+        NamespaceString nss(dbName);
+        auto opMsgRequest = OpMsgRequest::fromDBAndBody(nss.db(), cmdObj).body;
+        auto findCommand = query_request_helper::makeFromFindCommand(
+            opMsgRequest, nss, apiStrict);
 
-        int stat;
-        try {
-            if (!pIndexManagerIO->IsConnected())
-                pIndexManagerIO->connectMyself();
-            if (!pRTreeIO->IsConnected())
-                pRTreeIO->connectMyself();
-
-            std::string collection = cmdObj["collection"].str();
-            BSONObj condition = cmdObj["condition"].Obj();
-            double center_x = condition["coordinates"].Array()[0].numberDouble();
-            double center_y = condition["coordinates"].Array()[1].numberDouble();
-
-            double maxDistance= condition["$maxDistance"].numberDouble();
-            double minDistance = condition["$minDistance"].numberDouble();
-            returnCursor = IM.GeoSearchNear(opCtx, dbName.db() ,collection, center_x, center_y, minDistance, maxDistance).get();
-            // int key_count = returnCursor->Count();
-            // log()<<"numbers of OID"<<key_count;
-
-            BSONObjBuilder query;
-            BSONObjBuilder filter;
-            BSONArrayBuilder query_criteria;
-            auto cursorNext = returnCursor->Next();
-            while (!cursorNext.isEmpty())
-            {
-                query_criteria.append(cursorNext["_id"]);
-
-                cursorNext = returnCursor->Next();
-            }
-            BSONObjBuilder in_query;
-            in_query.append("$in",query_criteria.arr());
-            filter.append("_id",in_query.obj());
-            query.append("find",collection);
-            query.append("filter",filter.obj());
-            // log()<<"at the very last, show the query:"<<show_query;
-
-
-            const NamespaceString nss(parseNs(dbName, cmdObj));
-            // log()<<"check collection name in CmdgeoWithinSearch:"<< ns; 
-            const auto cri = uassertStatusOK(Grid::get(opCtx)->catalogCache()->getCollectionRoutingInfo(opCtx, nss));
-
-            auto cmdToBeSent = query.obj();
-
-            auto shardResponses = scatterGatherVersionedTargetByRoutingTable(
-                opCtx,
-                nss.db(),
-                nss,
-                cri,
-                CommandHelpers::filterCommandRequestForPassthrough(
-                    applyReadWriteConcern(opCtx, this, cmdToBeSent)),
-                ReadPreferenceSetting(ReadPreference::PrimaryPreferred),
-                Shard::RetryPolicy::kNoRetry,
-                BSONObj() /* query */,
-                BSONObj() /* collation */
-            );
-
-            std::string errmsg;
-            const bool ok = appendRawResponses(opCtx, &errmsg, &result, std::move(shardResponses)).responseOK;
-            CommandHelpers::appendSimpleCommandStatus(result, ok, errmsg);
-
-        if (ok) {
-            LOGV2(40002, "GeoNearCursor returned results successfully", "namespace"_attr = nss);
-        }
-        return ok;
-            
-        }
-        catch (DBException& e) {
-            stat = -1;
-            int code = e.code();
-
-            stringstream ss;
-            std::string errMsg;
-            ss << "exception: " << e.what();
-            errMsg = ss.str();
-            result.append("code", code);
-        }
-        bool ok = (stat == 1) ? true : false;
-        return ok;
-    }
-
-    int rtreeDataMore(int nCount,std::queue<BSONObj>& results)
-    {
-        //log()<<"jinrule datamore"<<endl;
-        if(nCount<1)
-          return 0;
-        for(int i = 0;i<nCount;i++)
-        {
-            //log()<<"will insert data-com"<<endl;
-            BSONObj obj = returnCursor->Next();
-            if(obj.isEmpty())
-               break;
-            results.push(obj);
-        }
-        return results.size();
-    }
-
-    void freeCursor() 
-    {
-        returnCursor->FreeCursor();
+        const boost::intrusive_ptr<ExpressionContext> expCtx;
+        auto cq = uassertStatusOK(
+            CanonicalQuery::canonicalize(opCtx,
+                                         std::move(findCommand),
+                                         false,
+                                         expCtx,
+                                         ExtensionsCallbackNoop(),
+                                         MatchExpressionParser::kBanAllSpecialFeatures));
+        std::vector<BSONObj> results;
+        CursorId cursorId; 
+        cursorId = ClusterFind::runQuery(opCtx, nss, cmdObj, *cq, ReadPreferenceSetting::get(opCtx), &results);
+        if (cursorId) return true;
+        return false;
     }
 
     // Slaves can't perform writes.
@@ -194,8 +111,6 @@ public:
     virtual bool isWriteCommandForConfigServer() const {
         return false;
     }
-private:
-    RTreeGeoNearCursor* returnCursor;
 } geoNearSearch;
 
 }  // namespace

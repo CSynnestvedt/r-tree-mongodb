@@ -35,8 +35,6 @@
 #include "mongo/db/auth/privilege.h"
 #include "mongo/db/commands.h"
 #include "mongo/logv2/log.h"
-#include "mongo/s/cluster_commands_helpers.h"
-#include "mongo/s/grid.h"
 #include "mongo/s/rtree/rtree_globle.h"
 #include "mongo/s/rtree/rtree_cursor.h"
 #include "mongo/s/rtree/rtree_range_query_cursor.h"
@@ -49,7 +47,7 @@ public:
     }
 
         std::string help() const override {
-        return "searches for objects within the specified range";
+        return "Deletes a geo objects contained within another";
     }
 
     bool supportsWriteConcern(const BSONObj& cmd) const override {
@@ -103,8 +101,7 @@ public:
             std::string errMsg = ss.str();
             result.append("code", code);
         }
-        bool ok = (stat == 1) ? true : false;
-        return ok;
+        return stat == 1;
     }
 
     // Slaves can't perform writes.

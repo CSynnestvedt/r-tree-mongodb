@@ -74,10 +74,9 @@ namespace mongo
          */
         static CursorId runQuery(OperationContext *opCtx,
                                              const NamespaceString nss,
-                                             BSONObj &jsobj,
+                                             const BSONObj &jsobj,
                                              CanonicalQuery &query,
                                              const ReadPreferenceSetting &readPref,
-                                             BSONObjBuilder &anObjBuilder,
                                              std::vector<BSONObj> *results,
                                              bool *partialResultsReturned = nullptr);
 

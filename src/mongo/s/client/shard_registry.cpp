@@ -33,6 +33,7 @@
 #include "mongo/s/client/shard_registry.h"
 
 #include "mongo/client/replica_set_monitor.h"
+#include "mongo/client/connpool.h"
 #include "mongo/db/catalog_shard_feature_flag_gen.h"
 #include "mongo/db/client.h"
 #include "mongo/db/vector_clock.h"
@@ -44,6 +45,8 @@
 #include "mongo/logv2/log.h"
 #include "mongo/rpc/metadata/egress_metadata_hook_list.h"
 #include "mongo/s/catalog/sharding_catalog_client.h"
+#include "mongo/s/catalog/type_geometadata.h"
+#include "mongo/s/catalog/type_indexmetadata.h"
 #include "mongo/s/catalog/type_shard.h"
 #include "mongo/s/grid.h"
 #include "mongo/util/future_util.h"
@@ -590,6 +593,152 @@ void ShardRegistry::initConfigShardIfNecessary(const ConnectionString& configCS)
     _scheduleLookup();
 }
 
+void ShardRegistry::registerGeometry(OperationContext* opCtx,BSONObj bdr)
+{
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    BSONObj cmd = BSON("insert" << GeoMetaData::ConfigNS.coll() << "documents" << bdr);
+    OpMsgRequest request = OpMsgRequest::fromDBAndBody(GeoMetaData::ConfigNS.db(), cmd);
+    conn->runCommand(request);
+    conn.done();
+    this->_currGeoMeta.datanamespace = bdr["datanamespace"].str();
+    this->_currGeoMeta.column_name = bdr["column_name"].str();
+    this->_currGeoMeta.gtype = bdr["gtype"].Int();
+    this->_currGeoMeta.index_type = bdr["index_type"].Int();
+    this->_currGeoMeta.srid = bdr["srid"].Int();
+    this->_currGeoMeta.crs_type = bdr["crs_type"].Int();
+    this->_currGeoMeta.tolerance = bdr["tolerance"].Double();
+    this->_currGeoMeta.index_info = bdr["index_info"].OID();
+
+}
+
+BSONObj ShardRegistry::getGeometry(OperationContext* opCtx,BSONObj query)
+{
+    if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["NAMESPACE"].str())
+    {
+        return this->_currGeoMeta.toBson();
+    }
+    else
+    {
+
+        ScopedDbConnection conn(getConfigServerConnectionString());
+        BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, query);
+        conn.done();
+        if (!Geo.isEmpty())
+        {
+            this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
+            this->_currGeoMeta.column_name = Geo["column_name"].str();
+            this->_currGeoMeta.gtype = Geo["gtype"].Int();
+            this->_currGeoMeta.index_type = Geo["index_type"].Int();
+            this->_currGeoMeta.srid = Geo["srid"].Int();
+            this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
+            this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
+            this->_currGeoMeta.index_info = Geo["index_info"].OID();
+        }
+        return Geo;
+    }
+}
+
+void  ShardRegistry::updateGeometry(OperationContext* opCtx,BSONObj query, BSONObj obj)
+{
+    // ScopedDbConnection conn(Grid::get(opCtx)->shardRegistry()->getConfigServerConnectionString());
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    conn->update(GeoMetaData::ConfigNS.db().toString(), query, obj);
+
+    BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, query);
+    conn.done();
+    if (!Geo.isEmpty())
+    {
+        this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
+        this->_currGeoMeta.column_name = Geo["column_name"].str();
+        this->_currGeoMeta.gtype = Geo["gtype"].Int();
+        this->_currGeoMeta.index_type = Geo["index_type"].Int();
+        this->_currGeoMeta.srid = Geo["srid"].Int();
+        this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
+        this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
+        this->_currGeoMeta.index_info = Geo["index_info"].OID();
+    }
+}
+
+void ShardRegistry::deleteGeometry(OperationContext* opCtx,BSONObj query)
+{
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    conn->remove(GeoMetaData::ConfigNS.db().toString(), query);
+    conn.done();
+    if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["datanamespace"].str())
+    {
+        this->_currGeoMeta.datanamespace ="";
+        this->_currGeoMeta.column_name ="";
+        this->_currGeoMeta.gtype = 0;
+        this->_currGeoMeta.index_type = 0;
+        this->_currGeoMeta.srid = 0;
+        this->_currGeoMeta.crs_type = 0;
+        this->_currGeoMeta.tolerance = 0;
+        this->_currGeoMeta.index_info = OID("000000000000000000000000");
+    }
+}
+
+bool ShardRegistry::checkGeoExist(OperationContext* opCtx, BSONObj bdr)
+{
+    if (bdr.hasField("datanamespace") && _currGeoMeta.datanamespace == bdr["datanamespace"].str())
+    {
+        return true;
+    }
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, bdr);
+    conn.done();
+    return !Geo.isEmpty();
+}
+
+bool ShardRegistry::checkRtreeExist(OperationContext* opCtx,BSONObj bdr)
+{
+    if (bdr.hasField("datanamespace") && _currGeoMeta.datanamespace == bdr["datanamespace"].str())
+    {
+        return _currGeoMeta.index_type != 0 ? true : false;
+    }
+
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, bdr);
+    conn.done();
+    if (Geo.isEmpty())
+        return false;
+    else
+        return Geo["index_type"].Int() != 0;
+}
+
+void ShardRegistry::insertIndexMetadata(OperationContext* opCtx,BSONObj bdr)
+{
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    BSONObj cmd = BSON("insert" << IndexMetaData::ConfigNS.coll() << "documents" << bdr);
+    OpMsgRequest request = OpMsgRequest::fromDBAndBody(IndexMetaData::ConfigNS.db(), cmd);
+    conn->runCommand(request);
+    conn.done();
+}
+
+BSONObj ShardRegistry::getIndexMetadata(OperationContext* opCtx,BSONObj query)
+{
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    BSONObj Geo = conn->findOne(IndexMetaData::ConfigNS, query);
+    conn.done();
+}
+
+void ShardRegistry::updateIndexMetadata(OperationContext* opCtx,BSONObj query, BSONObj obj)
+{
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    conn->update(IndexMetaData::ConfigNS.db().toString(), query, obj);
+    conn.done();
+}
+
+void ShardRegistry::deleteIndexMetadata(OperationContext* opCtx,BSONObj query)
+{
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    conn->remove(IndexMetaData::ConfigNS.db().toString(), query);
+    conn.done();
+}
+
+
+
+
+
 ////////////// ShardRegistryData //////////////////
 
 ShardRegistryData ShardRegistryData::createWithConfigShardOnly(std::shared_ptr<Shard> configShard) {
@@ -866,5 +1015,4 @@ BSONObj ShardRegistryData::toBSON() const {
     toBSON(&bob);
     return bob.obj();
 }
-
 }  // namespace mongo
