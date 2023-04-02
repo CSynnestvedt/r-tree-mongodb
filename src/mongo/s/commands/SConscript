@@ -99,12 +99,16 @@ env.Library(
         'cluster_whats_my_uri_cmd.cpp',
         'cluster_write_cmd_s.cpp',
         'cluster_write_without_shard_key_cmd.cpp',
+        'delete_contained_geo_obj_cmd.cpp',
+        'delete_geo_by_id_cmd.cpp',
+        'insert_indexed_doc_cmd.cpp',
         'geo_intersect_search_cmd.cpp',
         'geo_near_search_cmd.cpp',
         'geo_within_search_cmd.cpp',
         'internal_transactions_test_command_s.cpp',
         'kill_sessions_remote.cpp',
         'refine_collection_shard_key.idl',
+        'register_geometry_cmd.cpp',
         's_read_write_concern_defaults_server_status.cpp',
         'shard_collection.idl',
     ],
@@ -161,6 +165,7 @@ env.Library(
         '$BUILD_DIR/mongo/s/mongos_topology_coordinator',
         '$BUILD_DIR/mongo/s/query/cluster_aggregate',
         '$BUILD_DIR/mongo/s/query/cluster_client_cursor',
+        '$BUILD_DIR/mongo/s/rtree/rtreeindex',
         '$BUILD_DIR/mongo/s/sharding_api',
         '$BUILD_DIR/mongo/s/sharding_router_api',
         '$BUILD_DIR/mongo/s/write_ops/write_without_shard_key_util',
@@ -173,13 +178,9 @@ env.Library(
 env.Library(
     target='rtree_io_commands',
     source=[
-        'delete_contained_geo_obj_cmd.cpp',
-        'delete_geo_by_id_cmd.cpp',
-        'insert_indexed_doc_cmd.cpp',
-        'register_geometry_cmd.cpp',
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/s/rtree/rtreeindex',
+
     ]
 )
 

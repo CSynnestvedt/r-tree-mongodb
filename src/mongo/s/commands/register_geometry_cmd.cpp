@@ -81,6 +81,9 @@ public:
         int stat=0;
         std::string errmsg;
         try {
+
+            std::cout << "\nWe made it into registerGeometry run function \n";
+            std::cout << "\n The command object is: " << cmdObj.toString() << "\n";
              // log()<<"cmd:"<<cmdObj<<"    -- TTTTO test driver>>>>>>>>>>>>>>>>>>";
             if (!pIndexManagerIO->IsConnected())
                 pIndexManagerIO->connectMyself();
