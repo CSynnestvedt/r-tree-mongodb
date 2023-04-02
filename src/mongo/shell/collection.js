@@ -233,10 +233,10 @@ DBCollection.prototype.registerGeometry = function(opt) {
         cmd.gtype = options.gtype;
     else
         cmd.gtype = 1;
-    if (options.torrance != undefined)
-        cmd.torrance = options.torrance;
+    if (options.tolerance != undefined)
+        cmd.tolerance = options.tolerance;
     else
-        cmd.torrance = 0.00001;
+        cmd.tolerance = 0.00001;
     if (options.srid != undefined)
         cmd.srid = options.srid;
     else

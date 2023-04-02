@@ -140,7 +140,7 @@ public:
         std::string meta = conf->getGeometry(opCtx, query)["column_name"].str();
         // log() << columnname <<"      caooooooo";
         // log() << meta ;
-        is_rtree = (meta == columnname) && (conf->checkRtreeExist(opCtx, query));
+        is_rtree = (meta == columnname) && (conf->rtreeExists(opCtx, query));
         // log() << "cao" << is_rtree ;
         
         //only  dropIndexes/deleteIndexes

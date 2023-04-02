@@ -205,10 +205,10 @@ namespace index_manager
         //auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
         uassertStatusOK(status.getStatus());
-        Grid::get(txn)->shardRegistry()->registerGeometry(txn, bdr.obj());
+        bool result = Grid::get(txn)->shardRegistry()->registerGeometry(txn, bdr.obj());
 		// DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
 	    // conf->registerGeometry(txn,bdr.obj());
-		return 1;
+		return result;
 	}
 
 	int MongoIndexManagerIO::Basic_DeleteOneGeoMeteData(OperationContext* txn,string DB_NAME,string STORAGE_NAME)
@@ -444,7 +444,7 @@ namespace index_manager
 		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
 	    uassertStatusOK(status.getStatus());;
         auto conf = Grid::get(txn)->shardRegistry();
-		return conf->checkRtreeExist(txn,bdr.obj());
+		return conf->rtreeExists(txn,bdr.obj());
 	}
 
 	bool MongoIndexManagerIO::RTree_GetDataMBR(string DB_NAME,string STORAGE_NAME, MBR &returnMBR, mongo::OID DataNodeKey, string COLUMN_NAME)

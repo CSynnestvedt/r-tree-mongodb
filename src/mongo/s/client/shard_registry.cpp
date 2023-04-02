@@ -593,13 +593,24 @@ void ShardRegistry::initConfigShardIfNecessary(const ConnectionString& configCS)
     _scheduleLookup();
 }
 
-void ShardRegistry::registerGeometry(OperationContext* opCtx,BSONObj bdr)
+// Registers a new metadata entry in the meta_geom collection (config db)
+bool ShardRegistry::registerGeometry(OperationContext* opCtx,BSONObj bdr)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\n registerGeometry: Inserting document into meta_geom: " << bdr.toString() << "\n";
+
+    // Connect and build insert request
     ScopedDbConnection conn(getConfigServerConnectionString());
-    BSONObj cmd = BSON("insert" << GeoMetaData::ConfigNS.coll() << "documents" << bdr);
+    BSONArrayBuilder builder;
+    auto documentInArray = builder.append(bdr).arr();
+    BSONObj cmd = BSON("insert" << GeoMetaData::ConfigNS.coll() << "documents" << documentInArray);
+    cmd = CommandHelpers::appendMajorityWriteConcern(cmd);
     OpMsgRequest request = OpMsgRequest::fromDBAndBody(GeoMetaData::ConfigNS.db(), cmd);
-    conn->runCommand(request);
-    conn.done();
+
+    // Run request and update local struct for fast lookup
+    auto reply = conn->runCommand(request);
+    auto status = getStatusFromCommandResult(reply->getCommandReply());
+    std::cout << "\nThe status from running the command against config svr: " << status.toString() << "\n";
     this->_currGeoMeta.datanamespace = bdr["datanamespace"].str();
     this->_currGeoMeta.column_name = bdr["column_name"].str();
     this->_currGeoMeta.gtype = bdr["gtype"].Int();
@@ -609,41 +620,51 @@ void ShardRegistry::registerGeometry(OperationContext* opCtx,BSONObj bdr)
     this->_currGeoMeta.tolerance = bdr["tolerance"].Double();
     this->_currGeoMeta.index_info = bdr["index_info"].OID();
 
+    // Close connection and return 1 if successful, 0 otherwise
+    conn.done();
+    return status.isOK();
+
 }
 
 BSONObj ShardRegistry::getGeometry(OperationContext* opCtx,BSONObj query)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\n geoGeometry: Retrieving metadata from meta_geom " << query.toString() << "\n";
+
+
+    // Check local struct to see if it matches the datanamespace
     if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["NAMESPACE"].str())
     {
         return this->_currGeoMeta.toBson();
     }
-    else
-    {
 
-        ScopedDbConnection conn(getConfigServerConnectionString());
-        BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, query);
-        conn.done();
-        if (!Geo.isEmpty())
-        {
-            this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
-            this->_currGeoMeta.column_name = Geo["column_name"].str();
-            this->_currGeoMeta.gtype = Geo["gtype"].Int();
-            this->_currGeoMeta.index_type = Geo["index_type"].Int();
-            this->_currGeoMeta.srid = Geo["srid"].Int();
-            this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
-            this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
-            this->_currGeoMeta.index_info = Geo["index_info"].OID();
-        }
-        return Geo;
+    // Establish connection and fetch metadata
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, query);
+    conn.done();
+    if (!Geo.isEmpty()) {
+        this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
+        this->_currGeoMeta.column_name = Geo["column_name"].str();
+        this->_currGeoMeta.gtype = Geo["gtype"].Int();
+        this->_currGeoMeta.index_type = Geo["index_type"].Int();
+        this->_currGeoMeta.srid = Geo["srid"].Int();
+        this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
+        this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
+        this->_currGeoMeta.index_info = Geo["index_info"].OID();
     }
+    return Geo;
 }
 
-void  ShardRegistry::updateGeometry(OperationContext* opCtx,BSONObj query, BSONObj obj)
+bool  ShardRegistry::updateGeometry(OperationContext* opCtx,BSONObj query, BSONObj obj)
 {
-    // ScopedDbConnection conn(Grid::get(opCtx)->shardRegistry()->getConfigServerConnectionString());
-    ScopedDbConnection conn(getConfigServerConnectionString());
-    conn->update(GeoMetaData::ConfigNS.db().toString(), query, obj);
+    // LOG COMMAND TO COUT
+    std::cout << "\n updateGeometry: Updating document in meta_geom: " << query.toString() << " with " << obj.toString() << "\n";
 
+    // Connect and update the query object
+    ScopedDbConnection conn(getConfigServerConnectionString());
+    auto reply = conn->updateAcknowledged(GeoMetaData::ConfigNS.db().toString(), query, obj);
+
+    // Update local struct with the new object
     BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, query);
     conn.done();
     if (!Geo.isEmpty())
@@ -657,12 +678,16 @@ void  ShardRegistry::updateGeometry(OperationContext* opCtx,BSONObj query, BSONO
         this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
         this->_currGeoMeta.index_info = Geo["index_info"].OID();
     }
+    return getStatusFromCommandResult(reply).isOK();
 }
 
-void ShardRegistry::deleteGeometry(OperationContext* opCtx,BSONObj query)
+bool ShardRegistry::deleteGeometry(OperationContext* opCtx,BSONObj query)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\ndeleteGeometry: Deleting document from meta_geom: " << query.toString() << "\n";
+
     ScopedDbConnection conn(getConfigServerConnectionString());
-    conn->remove(GeoMetaData::ConfigNS.db().toString(), query);
+    auto reply = conn->removeAcknowledged(GeoMetaData::ConfigNS.db().toString(), query);
     conn.done();
     if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["datanamespace"].str())
     {
@@ -675,64 +700,94 @@ void ShardRegistry::deleteGeometry(OperationContext* opCtx,BSONObj query)
         this->_currGeoMeta.tolerance = 0;
         this->_currGeoMeta.index_info = OID("000000000000000000000000");
     }
+    return getStatusFromCommandResult(reply).isOK();
 }
 
 bool ShardRegistry::checkGeoExist(OperationContext* opCtx, BSONObj bdr)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\ncheckGeoExist: Checking if geometry exists in meta_geom: " << bdr.toString() << "\n";
+
+    // Check local struct to see if it matches the datanamespace
     if (bdr.hasField("datanamespace") && _currGeoMeta.datanamespace == bdr["datanamespace"].str())
     {
         return true;
     }
+
+    // Connect and retrieve metadata if it exists
     ScopedDbConnection conn(getConfigServerConnectionString());
-    BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, bdr);
+    BSONObj geo = conn->findOne(GeoMetaData::ConfigNS, bdr);
     conn.done();
-    return !Geo.isEmpty();
+    return !geo.isEmpty();
 }
 
-bool ShardRegistry::checkRtreeExist(OperationContext* opCtx,BSONObj bdr)
+bool ShardRegistry::rtreeExists(OperationContext* opCtx,BSONObj bdr)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\nrtreeExists: Checking if metadata exists and index_type != 0: " << bdr.toString() << "\n";
+
+    // Check local struct to see if it matches the datanamespace
     if (bdr.hasField("datanamespace") && _currGeoMeta.datanamespace == bdr["datanamespace"].str())
     {
         return _currGeoMeta.index_type != 0 ? true : false;
     }
 
+    // Check the index_type of geom_meta (configdb)
     ScopedDbConnection conn(getConfigServerConnectionString());
-    BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, bdr);
+    BSONObj geo = conn->findOne(GeoMetaData::ConfigNS, bdr);
     conn.done();
-    if (Geo.isEmpty())
-        return false;
-    else
-        return Geo["index_type"].Int() != 0;
+    if (geo.isEmpty()) return false;
+    return geo["index_type"].Int() != 0;
 }
 
-void ShardRegistry::insertIndexMetadata(OperationContext* opCtx,BSONObj bdr)
+bool ShardRegistry::insertIndexMetadata(OperationContext* opCtx,BSONObj bdr)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\n insertIndexMetadata: Inserting document into meta_rtree: " << bdr.toString() << "\n";
+
+    // Connect and build command
     ScopedDbConnection conn(getConfigServerConnectionString());
     BSONObj cmd = BSON("insert" << IndexMetaData::ConfigNS.coll() << "documents" << bdr);
+    cmd = CommandHelpers::appendMajorityWriteConcern(cmd);
     OpMsgRequest request = OpMsgRequest::fromDBAndBody(IndexMetaData::ConfigNS.db(), cmd);
-    conn->runCommand(request);
+
+    // Execute and return status.isOK()
+    auto reply = conn->runCommand(request);
     conn.done();
+    return getStatusFromCommandResult(reply->getCommandReply()).isOK();
 }
 
 BSONObj ShardRegistry::getIndexMetadata(OperationContext* opCtx,BSONObj query)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\n getIndexMetadata: Retrieving metadata from meta_rtree if exists: " << query.toString() << "\n";
+
     ScopedDbConnection conn(getConfigServerConnectionString());
-    BSONObj Geo = conn->findOne(IndexMetaData::ConfigNS, query);
+    BSONObj geo = conn->findOne(IndexMetaData::ConfigNS, query);
     conn.done();
+    return geo;
 }
 
-void ShardRegistry::updateIndexMetadata(OperationContext* opCtx,BSONObj query, BSONObj obj)
+bool ShardRegistry::updateIndexMetadata(OperationContext* opCtx,BSONObj query, BSONObj obj)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\n updateGeometry: Updating document in meta_rtree: " << query.toString() << " with " << obj.toString() << "\n";
+
     ScopedDbConnection conn(getConfigServerConnectionString());
-    conn->update(IndexMetaData::ConfigNS.db().toString(), query, obj);
+    auto reply = conn->updateAcknowledged(IndexMetaData::ConfigNS.db().toString(), query, obj);
     conn.done();
+    return getStatusFromCommandResult(reply).isOK();
 }
 
-void ShardRegistry::deleteIndexMetadata(OperationContext* opCtx,BSONObj query)
+bool ShardRegistry::deleteIndexMetadata(OperationContext* opCtx,BSONObj query)
 {
+    // LOG COMMAND TO COUT
+    std::cout << "\ndeleteGeometry: Deleting document from meta_geom: " << query.toString() << "\n";
     ScopedDbConnection conn(getConfigServerConnectionString());
-    conn->remove(IndexMetaData::ConfigNS.db().toString(), query);
+    
+    auto reply = conn->removeAcknowledged(IndexMetaData::ConfigNS.db().toString(), query);
     conn.done();
+    return getStatusFromCommandResult(reply).isOK();
 }
 
 

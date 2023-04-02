@@ -51,7 +51,7 @@ public:
     }
 
     bool supportsWriteConcern(const BSONObj& cmd) const override {
-        return false;
+        return true;
     }
 
     AllowedOnSecondary secondaryAllowed(ServiceContext*) const override {
@@ -106,6 +106,7 @@ public:
                 stat = IM.RegisterGeometry(opCtx, dbName.db(), cmdObj["collectionName"].str(), cmdObj["field"].str(), gtype,srid, crstype, tolerance);
             else
                 errmsg = "Please type the field you want to build an index on";
+        
         }
         catch (DBException& e) {
             int code = e.code();
@@ -123,6 +124,7 @@ public:
         if (-4 == stat)
             errmsg = "crstype must be 0, 1 or 2";
         bool ok = (stat == 1) ? true : false;
+        std::cout << "\n Returned value from IndexManager Registergeometry: " << stat << "\n";
         return ok;
     }
 
