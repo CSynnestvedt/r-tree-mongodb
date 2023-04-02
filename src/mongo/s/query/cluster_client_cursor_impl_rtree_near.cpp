@@ -40,9 +40,6 @@
 namespace mongo
 {
 
-    static CounterMetric mongosCursorStatsTotalOpened("mongos.cursor.totalOpened");
-    static CounterMetric mongosCursorStatsMoreThanOneBatch("mongos.cursor.moreThanOneBatch");
-
     ClusterClientCursorGuard RTreeNearClusterClientCursorImpl::make(
         OperationContext *opCtx,
         std::shared_ptr<executor::TaskExecutor> executor,
@@ -94,7 +91,6 @@ namespace mongo
         dassert(!_params.compareWholeSortKeyOnRouter ||
                 SimpleBSONObjComparator::kInstance.evaluate(
                     _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
-        mongosCursorStatsTotalOpened.increment();
     }
 
     RTreeNearClusterClientCursorImpl::RTreeNearClusterClientCursorImpl(OperationContext *opCtx,
@@ -112,7 +108,6 @@ namespace mongo
         dassert(!_params.compareWholeSortKeyOnRouter ||
                 SimpleBSONObjComparator::kInstance.evaluate(
                     _params.sortToApplyOnRouter == AsyncResultsMerger::kWholeSortKeySortPattern));
-        mongosCursorStatsTotalOpened.increment();
     }
 
     RTreeNearClusterClientCursorImpl::RTreeNearClusterClientCursorImpl(OperationContext *txn,
@@ -130,8 +125,7 @@ namespace mongo
 
     RTreeNearClusterClientCursorImpl::~RTreeNearClusterClientCursorImpl()
     {
-        if (_nBatchesReturned > 1)
-            mongosCursorStatsMoreThanOneBatch.increment();
+        
     }
 
     StatusWith<ClusterQueryResult> RTreeNearClusterClientCursorImpl::next()
