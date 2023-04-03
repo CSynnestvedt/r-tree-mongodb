@@ -140,7 +140,7 @@ namespace rtree_index
             if(_isFirstTime)
 			{
 				_isFirstTime=false;
-				return _DataIO->Basic_Fetch_AtomData(_DB_NAME, _COLLECTION_NAME, _Current_Target);
+				return _DataIO->basicFindNodeById(_DB_NAME, _COLLECTION_NAME, _Current_Target);
 			}
 			//
 			
@@ -198,7 +198,7 @@ namespace rtree_index
 								
 								if(_queryType==0)//geoWithin
 								{
-									if(_DataIO->Geo_Verify_Contain(id2Test,_SearchGeometry,false,_DB_NAME,_COLLECTION_NAME,_COLUMN_NAME))
+									if(_DataIO->geoVerifyContains(id2Test,_SearchGeometry,false,_DB_NAME,_COLLECTION_NAME,_COLUMN_NAME))
 									{
 										 _Current_Target = CurrentNode.Branchs[_NodeIDStack.top()].ChildKey;
 								         hasMore = true;
@@ -208,7 +208,7 @@ namespace rtree_index
 								}
 								if(_queryType==1)
 								{
-									if(_DataIO->Geo_Verify_Intersect(id2Test,_SearchGeometry,false,_DB_NAME,_COLLECTION_NAME,_COLUMN_NAME))
+									if(_DataIO->geoVerifyIntersect(id2Test,_SearchGeometry,false,_DB_NAME,_COLLECTION_NAME,_COLUMN_NAME))
 									{
 										 _Current_Target = CurrentNode.Branchs[_NodeIDStack.top()].ChildKey;
 								         hasMore = true;
@@ -248,7 +248,7 @@ namespace rtree_index
 		if (hasMore)
 		{
 
-			_DataIO->Basic_Fetch_AtomData(_DB_NAME, _COLLECTION_NAME, _Current_Target);
+			_DataIO->basicFindNodeById(_DB_NAME, _COLLECTION_NAME, _Current_Target);
 		}
 		else
 		{

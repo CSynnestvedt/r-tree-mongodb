@@ -65,26 +65,26 @@ namespace index_manager
 	{
 	public:
 		 IndexManagerBase();
-		 IndexManagerBase(MongoIndexManagerIO *USER_INDEXMANAGER_IO, MongoIO *USER_RTREE_IO);
-		 int RegisterGeometry(OperationContext* txn,string DB_NAME,string COLLECTION_NAME, string COLUMN_NAME, int SDO_GTYPE, int SDO_SRID, int CRS_TYPE, double SDO_TORRANCE);
-		 int PrepareIndex(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME, int INDEX_TYPE, int Max_Node, int Max_Leaf);
-		 int DeleteGeoObjByKey(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, mongo::OID key2delete);
-		 int DeleteIntersectedGeoObj(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry);
-		 int DeleteContainedGeoObj(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry);
-		 int DropIndex(OperationContext* txn,string DB_NAME, string COLLECTIONNAME);
-		 int DropCollection(OperationContext* txn,string DB_NAME, string COLLECTIONNAME);
-		 int ValidateGeometry(OperationContext* txn,string DB_NAME, string COLLECTION_NAME);
-		 int RepairIndex(string DB_NAME, string COLLECTION_NAME);
-		 int InsertIndexedDoc(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, mongo::BSONObj AtomData, BSONObjBuilder& result);
-		 std::unique_ptr<RTreeRangeQueryCursor> GeoSearchWithin(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry);
-		 bool GeoSearchWithinWithoutRefining(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry, vector<mongo::OID>& results);
-         std::unique_ptr<RTreeRangeQueryCursor> GeoSearchIntersects(OperationContext* txn, string DB_NAME, string COLLECTION_NAME, mongo::BSONObj InputGeometry);
-		 std::unique_ptr<RTreeGeoNearCursor> GeoSearchNear(OperationContext* txn, string DB_NAME,string COLLECTION_NAME,double ctx,double cty,double rMin,double rMax);
-		 bool InitalizeManager(MongoIndexManagerIO *USER_INDEXMANAGER_IO,MongoIO *USER_RTREE_IO);
+		 IndexManagerBase(MongoIndexManagerIO *userIndexManagerIO, MongoIO *userRtreeIO);
+		 int RegisterGeometry(OperationContext* opCtx,string dbName,string collectionName, string columnName, int sdoGType, int sdoSRID, int crsType, double tolerance);
+		 int PrepareIndex(OperationContext* opCtx,string dbName, string collectionName, string columnName, int indexType, int maxNode, int maxLeaf);
+		 int DeleteGeoObjByKey(OperationContext* opCtx,string dbName, string collectionName, mongo::OID key2delete);
+		 int DeleteIntersectedGeoObj(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj InputGeometry);
+		 int DeleteContainedGeoObj(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj InputGeometry);
+		 int DropIndex(OperationContext* opCtx,string dbName, string collectionName);
+		 int DropCollection(OperationContext* opCtx,string dbName, string collectionName);
+		 int ValidateGeometry(OperationContext* opCtx,string dbName, string collectionName);
+		 int RepairIndex(string dbName, string collectionName);
+		 int InsertIndexedDoc(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj atomData, BSONObjBuilder& result);
+		 std::unique_ptr<RTreeRangeQueryCursor> GeoSearchWithin(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj InputGeometry);
+		 bool GeoSearchWithinWithoutRefining(OperationContext* opCtx,string dbName, string collectionName,mongo::BSONObj InputGeometry, vector<mongo::OID>& results);
+         std::unique_ptr<RTreeRangeQueryCursor> GeoSearchIntersects(OperationContext* opCtx, string dbName, string collectionName, mongo::BSONObj InputGeometry);
+		 std::unique_ptr<RTreeGeoNearCursor> GeoSearchNear(OperationContext* opCtx, string dbName,string collectionName,double ctx,double cty,double rMin,double rMax);
+		 bool InitalizeManager(MongoIndexManagerIO *userIndexManagerIO, MongoIO *userRtreeIO);
 	private:
-		 MongoIndexManagerIO *IO;
-		 RTree _R;
-		 MongoIO *_RIO;
+		 MongoIndexManagerIO *_IO;
+		 RTree _Rtree;
+		 MongoIO *_RtreeIO;
 	};
 
 	

@@ -65,7 +65,7 @@ namespace rtree_index
 		 *Connect to database
 		 */
 		bool connectMyself();
-		bool IsConnected();
+		bool isConnected();
 	private:
 		string _dbName;
 		string _Data_CollectionName;

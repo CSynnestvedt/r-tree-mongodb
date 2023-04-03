@@ -80,9 +80,9 @@ public:
             BSONObjBuilder& result) {
         int stat;
         try {
-            if (!pIndexManagerIO->IsConnected())
+            if (!pIndexManagerIO->isConnected())
                 pIndexManagerIO->connectMyself();
-            if (!pRTreeIO->IsConnected())
+            if (!pRTreeIO->isConnected())
                 pRTreeIO->connectMyself();
             BSONElement e = cmdObj.firstElement();
             std::string collname = e.String();

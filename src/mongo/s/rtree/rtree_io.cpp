@@ -56,7 +56,7 @@ namespace rtree_index
 		return true;
 	}
 
-	bool rtree_index::MongoIO::IsConnected()
+	bool rtree_index::MongoIO::isConnected()
 	{
 		if (_conn != 0&&this->_conn->isStillConnected())
 			return true;
@@ -94,7 +94,7 @@ namespace rtree_index
 		BSONObj theNodeBSON;
 	    { 
 			stdx::lock_guard<stdx::mutex> CONN_lock(_connection_mu);
-			if(!IsConnected())
+			if(!isConnected())
 			{
 				connectMyself();
 			}
@@ -176,7 +176,7 @@ namespace rtree_index
 	int rtree_index::MongoIO::Basic_If_Exist_Collection(string StorageName)
 	{
 		/*exist*/
-		if(!IsConnected())
+		if(!isConnected())
 		{
 				connectMyself();
 		}
@@ -352,7 +352,7 @@ int nodeInCacheBranchCount = 0;
 		/*findoOne*/
 		{
 	    	stdx::lock_guard<stdx::mutex> CONN_lock(_connection_mu);
-			if(!IsConnected())
+			if(!isConnected())
 		    {
 				connectMyself();
 		    }

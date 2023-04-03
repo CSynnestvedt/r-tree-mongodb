@@ -582,7 +582,7 @@ namespace rtree_index
 				_Need2ReformCmpVectors[i] = false;
 			}
 
-			return _DataIO->Basic_Fetch_AtomData(_db_name, _collection_name, returnKey);
+			return _DataIO->basicFindNodeById(_db_name, _collection_name, returnKey);
 		}
 	}
 
@@ -800,7 +800,7 @@ namespace rtree_index
 				else
 				{
 					double calculateAccurateDistance;
-					_DataIO->Geo_Verify_Intersect(Node2Fill->data.Branchs[i].ChildKey, _ctx, _cty, _minDistance, _maxDistance, false, _db_name, _collection_name, _column_name, calculateAccurateDistance);
+					_DataIO->geoVerifyIntersect(Node2Fill->data.Branchs[i].ChildKey, _ctx, _cty, _minDistance, _maxDistance, false, _db_name, _collection_name, _column_name, calculateAccurateDistance);
 					if (calculateAccurateDistance <= _maxDistance &&calculateAccurateDistance >= _minDistance)
 					{
 						KeywithDis node2sort;

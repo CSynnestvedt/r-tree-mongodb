@@ -82,9 +82,9 @@ public:
 
         int stat=0;
         try {
-            if (!pIndexManagerIO->IsConnected())
+            if (!pIndexManagerIO->isConnected())
                 pIndexManagerIO->connectMyself();
-            if (!pRTreeIO->IsConnected())
+            if (!pRTreeIO->isConnected())
                 pRTreeIO->connectMyself();
 
             BSONElement e = cmdObj.firstElement();

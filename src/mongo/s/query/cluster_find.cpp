@@ -318,8 +318,7 @@ namespace mongo
             params.isAllowPartialResults = findCommand.getAllowPartialResults();
             params.lsid = opCtx->getLogicalSessionId();
             params.txnNumber = opCtx->getTxnNumber();
-            
-            // {filter: {0: "theFilterValue"}}
+            // {filter: {0: {$geoWithin: {$geometry: {type: "Polygon", $maxDistance: 4, $minDistance: 5}}}}}
             if (!filter.isEmpty() && columnName.compare(std::string(filter.firstElement().fieldName())) == 0 && filter.firstElement().isABSONObj())
             {
                 is_registered = true; // we find the geometadata in config server
@@ -364,13 +363,6 @@ namespace mongo
                 }
             }
 
-            /**
-             * parse and check complete, construct cursor;
-             * because ccc is mongo_disallow_copying, we can't just create an
-             * empty ccc object and construct in different conditions
-             * we copy the code 3 times
-             * hope there is a better way
-             */
             int cursorMode = is_command_geowithin ? 1 : 0;
             auto createCursorClientGuard = [&](int cursorMode, bool isCmdGeonear, bool isTypePoint)
             {

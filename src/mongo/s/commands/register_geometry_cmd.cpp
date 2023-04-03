@@ -85,9 +85,9 @@ public:
             std::cout << "\nWe made it into registerGeometry run function \n";
             std::cout << "\n The command object is: " << cmdObj.toString() << "\n";
              // log()<<"cmd:"<<cmdObj<<"    -- TTTTO test driver>>>>>>>>>>>>>>>>>>";
-            if (!pIndexManagerIO->IsConnected())
+            if (!pIndexManagerIO->isConnected())
                 pIndexManagerIO->connectMyself();
-            if (!pRTreeIO->IsConnected())
+            if (!pRTreeIO->isConnected())
                 pRTreeIO->connectMyself();
             double gtype=0;
             if (cmdObj.hasField("gtype"))

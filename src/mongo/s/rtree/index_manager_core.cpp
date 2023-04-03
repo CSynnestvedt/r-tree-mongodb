@@ -41,37 +41,37 @@ namespace index_manager
 		
 	}
 	
-	IndexManagerBase::IndexManagerBase(MongoIndexManagerIO *USER_INDEXMANAGER_IO, MongoIO *USER_RTREE_IO)
+	IndexManagerBase::IndexManagerBase(MongoIndexManagerIO *userIndexManagerIO, MongoIO *userRtreeIO)
 	{
-		IO = USER_INDEXMANAGER_IO;
-		_RIO = USER_RTREE_IO;
-		_R.IO = _RIO;
+		_IO = userIndexManagerIO;
+		_RtreeIO = userRtreeIO;
+		_Rtree.IO = _RtreeIO;
 	}
 	
 	
-	int IndexManagerBase::RegisterGeometry(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME, int SDO_GTYPE, int SDO_SRID, int CRS_TYPE, double SDO_TORRANCE)
+	int IndexManagerBase::RegisterGeometry(OperationContext* opCtx, string dbName, string collectionName, string columnName, int sdoGType, int sdoSRID, int crsType, double tolerance)
 	{
 		
-		if (IO->Basic_Exist_Geo_MeteData(txn,DB_NAME,COLLECTION_NAME))
+		if (_IO->basicGeoMetadataExists(opCtx,dbName,collectionName))
 		{
 			return -1;
 		}
 		
-		if (SDO_GTYPE < 0 || SDO_GTYPE>7)
+		if (sdoGType < 0 || sdoGType>7)
 		{
 			return -2;
 		}
-		if (SDO_TORRANCE < 0)
+		if (tolerance < 0)
 		{
 			return -3;
 		}
-		if (CRS_TYPE < 0 || CRS_TYPE>2)
+		if (crsType < 0 || crsType>2)
 		{
 			return -4;
 		}
 
 
-		if (IO->Basic_StorageOneGeoMeteData(txn,DB_NAME,COLLECTION_NAME, COLUMN_NAME, 0, MBR(0, 0, 0, 0), SDO_GTYPE, SDO_SRID, CRS_TYPE, SDO_TORRANCE))
+		if (_IO->basicInsertGeoMetadata(opCtx,dbName,collectionName, columnName, 0, MBR(0, 0, 0, 0), sdoGType, sdoSRID, crsType, tolerance))
 		{
 
 			return 1;
@@ -81,57 +81,57 @@ namespace index_manager
 	}
 
 
-	int IndexManagerBase::PrepareIndex(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, string COLUMN_NAME, int INDEX_TYPE, int Max_Node, int Max_Leaf)
+	int IndexManagerBase::PrepareIndex(OperationContext* opCtx,string dbName, string collectionName, string columnName, int indexType, int maxNode, int maxLeaf)
 	{
-		// std::cout<<"NS in Operation context: (PrepareIndex)"<<txn->getNS()<<endl;
+		// std::cout<<"NS in Operation context: (PrepareIndex)"<<opCtx->getNS()<<endl;
 		
 		//log() << "position0" << endl;
-		if (INDEX_TYPE <= 0 || INDEX_TYPE > 2)
+		if (indexType <= 0 || indexType > 2)
 		{
 			return -1;
 		}
-		if (!IO->Basic_Exist_Geo_MeteData(txn,DB_NAME,COLLECTION_NAME))
+		if (!_IO->basicGeoMetadataExists(opCtx,dbName,collectionName))
 		{
 			return -2;
 		}
 		else
 		{	
-			if (IO->RTree_ExistIndex(txn,DB_NAME,COLLECTION_NAME))
+			if (_IO->rtreeIndexExists(opCtx,dbName,collectionName))
 			{
 				return -3;
 			}
-			if (INDEX_TYPE == 1)
+			if (indexType == 1)
 			{
-				Transaction* t = new CreateIndexTransaction(txn,DB_NAME);
+				Transaction* t = new CreateIndexTransaction(opCtx,dbName);
 				mongo::OID tempkey;
-				IO->RTree_StorageIndexMeteData(t,COLLECTION_NAME, Max_Node, Max_Leaf, tempkey);
+				_IO->rtreeInsertIndexMetaData(t,collectionName, maxNode, maxLeaf, tempkey);
 				mongo::OID nullKey;
-				_R.ReConfigure(Max_Node, Max_Leaf, nullKey, DB_NAME, COLLECTION_NAME);
+				_Rtree.ReConfigure(maxNode, maxLeaf, nullKey, dbName, collectionName);
 
 				mongo::OID Root;
-				_R.InsertRoot(txn,Root);
-				t->InsertDone(3,"rtree_"+COLLECTION_NAME,rtree_index::INSERT,"InsertRoot");
+				_Rtree.InsertRoot(opCtx,Root);
+				t->InsertDone(3,"rtree_"+collectionName,rtree_index::INSERT,"InsertRoot");
 
-				IO->Basic_Init_Storage_Traverse(txn,DB_NAME,COLLECTION_NAME);
-				t->UpdateDone(4,"rtree_"+COLLECTION_NAME,rtree_index::UPDATE,"begin building Rtree index on existing data");
+				_IO->basicInitStorageTraverse(opCtx,dbName,collectionName);
+				t->UpdateDone(4,"rtree_"+collectionName,rtree_index::UPDATE,"begin building Rtree index on existing data");
 				mongo::OID oneKey;
 				MBR oneMBR;
 				int count = 0;
 
-				while (IO->Basic_Storage_Traverse_Next(oneMBR,oneKey))
+				while (_IO->basicStorageTraverseNext(oneMBR,oneKey))
 				{
 					Branch b;
 					b.ChildKey=oneKey;
 					b.HasData = true;
 					b.mbr = oneMBR;
-					_R.Insert(txn,Root, b, 0);
+					_Rtree.Insert(opCtx,Root, b, 0);
 					if (count%100==0)
 					cout << count << "  "<< Root<<"\r";
 					count++;
 				}
-				t->UpdateDone(5,"rtree_"+COLLECTION_NAME,rtree_index::UPDATE,"finish building Rtree index on existing data");
+				t->UpdateDone(5,"rtree_"+collectionName,rtree_index::UPDATE,"finish building Rtree index on existing data");
 				
-				IO->RTree_ModifyRootKey(txn,DB_NAME,COLLECTION_NAME, Root);
+				_IO->rteeModifyRootKey(opCtx,dbName,collectionName, Root);
 				t->UpdateDone(6, "config.meta_geom", rtree_index::UPDATE, "Update Root Key in meta_geom");
 				delete t;
 				return 1;
@@ -150,16 +150,16 @@ namespace index_manager
 	   0: Something wrong
 	*/
 	
-	int IndexManagerBase::ValidateGeometry(OperationContext* txn,string DB_NAME,string COLLECTION_NAME)
+	int IndexManagerBase::ValidateGeometry(OperationContext* opCtx,string dbName,string collectionName)
 	{
-		IO->Basic_Init_Storage_Traverse(txn,DB_NAME,COLLECTION_NAME);
+		_IO->basicInitStorageTraverse(opCtx,dbName,collectionName);
 		mongo::OID oneKey;
 		MBR oneMBR;
 
 		//Easy Verify,Robust Verify please use mongo:: GeoJSON parser
 		while (true)
 		{
-			int flag = IO->Basic_Storage_Traverse_Next(oneMBR, oneKey);
+			int flag = _IO->basicStorageTraverseNext(oneMBR, oneKey);
 			if (flag == 1)
 			{
 				continue;
@@ -178,31 +178,31 @@ namespace index_manager
 	}
 
 	
-	std::unique_ptr<RTreeRangeQueryCursor>  IndexManagerBase::GeoSearchWithin(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, mongo::BSONObj InputGeometry)
+	std::unique_ptr<RTreeRangeQueryCursor>  IndexManagerBase::GeoSearchWithin(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj InputGeometry)
 	{
 		vector < mongo::OID >  ResultKeys;
 		vector<bool> lazyIntersects;
 		vector<mongo::OID> RefinedResultKeys;
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME, COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName, collectionName);
 		// log()<<"index_type:"<<index_type;
 		if (index_type> 0)
 		{
 			if (index_type == 1)
 			{
 				mongo::OID RootKey;
-				int Max_Node = 0;
-				int Max_Leaf = 0;
+				int maxNode = 0;
+				int maxLeaf = 0;
 				string cn;
-				if (IO->RTree_GetParms(txn,DB_NAME, COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+				if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
-					// log()<<Max_Node<<","<<Max_Leaf;
-					_R.ReConfigure(Max_Node, Max_Leaf, RootKey, DB_NAME, COLLECTION_NAME);
+					// log()<<maxNode<<","<<maxLeaf;
+					_Rtree.ReConfigure(maxNode, maxLeaf, RootKey, dbName, collectionName);
                     //parseGeometry
 					geos::geom::Geometry * pGeometry = NULL;
-					if (IO->ParseGeometry(InputGeometry, pGeometry))//parseSuccess
+					if (_IO->parseGeometry(InputGeometry, pGeometry))//parseSuccess
 					{
-						Node RootNode = _RIO->Basic_Find_One_Node(RootKey);
-						std::unique_ptr<RTreeRangeQueryCursor> returnCursor (new RTreeRangeQueryCursor(Max_Node, RootNode, _RIO, IO, pGeometry, DB_NAME, COLLECTION_NAME, cn, 0));
+						Node RootNode = _RtreeIO->Basic_Find_One_Node(RootKey);
+						std::unique_ptr<RTreeRangeQueryCursor> returnCursor (new RTreeRangeQueryCursor(maxNode, RootNode, _RtreeIO, _IO, pGeometry, dbName, collectionName, cn, 0));
 						returnCursor->InitCursor();
 						return std::move(returnCursor);
 					}
@@ -215,10 +215,10 @@ namespace index_manager
 	}
 	
 	
-	bool IndexManagerBase::GeoSearchWithinWithoutRefining(OperationContext* txn,string DB_NAME, string COLLECTION_NAME,mongo::BSONObj InputGeometry, vector<mongo::OID>& results)
+	bool IndexManagerBase::GeoSearchWithinWithoutRefining(OperationContext* opCtx,string dbName, string collectionName,mongo::BSONObj InputGeometry, vector<mongo::OID>& results)
 	{
 		vector<bool> lazyIntersects;
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME, COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName, collectionName);
 		// log()<<"IndexType:"<<index_type;
 		// log()<<"filter:"<<InputGeometry;
 		if (index_type> 0)
@@ -226,20 +226,20 @@ namespace index_manager
 			if (index_type == 1)
 			{
 				mongo::OID RootKey;
-				int Max_Node = 0;
-				int Max_Leaf = 0;
+				int maxNode = 0;
+				int maxLeaf = 0;
 				string cn;
-				if (IO->RTree_GetParms(txn,DB_NAME, COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+				if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
-					// log()<<Max_Node<<","<<Max_Leaf;
-					_R.ReConfigure(Max_Node, Max_Leaf, RootKey, DB_NAME, COLLECTION_NAME);
+					// log()<<maxNode<<","<<maxLeaf;
+					_Rtree.ReConfigure(maxNode, maxLeaf, RootKey, dbName, collectionName);
                     //parseGeometry
 					geos::geom::Geometry * pGeometry = NULL;
-					if (IO->ParseGeometry(InputGeometry, pGeometry))//parseSuccess
+					if (_IO->parseGeometry(InputGeometry, pGeometry))//parseSuccess
 					{
 						if (pGeometry->getGeometryType() == "MultiPolygon" || pGeometry->getGeometryType() == "Polygon")
 						{
-							_R.Search(pGeometry, results, lazyIntersects);
+							_Rtree.Search(pGeometry, results, lazyIntersects);
 						}
 						else
 						{
@@ -251,36 +251,36 @@ namespace index_manager
 				}
 			}
 		}
-		//RTreeCursor<Key> returnCursor(RefinedResultKeys, DB_NAME, COLLECTION_NAME);
+		//RTreeCursor<Key> returnCursor(RefinedResultKeys, dbName, collectionName);
 		return true;
 	}
 
 		
-	std::unique_ptr<RTreeRangeQueryCursor> IndexManagerBase::GeoSearchIntersects(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, mongo::BSONObj InputGeometry)
+	std::unique_ptr<RTreeRangeQueryCursor> IndexManagerBase::GeoSearchIntersects(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj InputGeometry)
 	{
 		vector < mongo::OID >  ResultKeys;
 		vector<bool> lazyIntersects;
 		vector<mongo::OID> RefinedResultKeys;
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME, COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName, collectionName);
 		// log()<<"index_type:"<<index_type;
 		if (index_type> 0)
 		{
 			if (index_type == 1)
 			{
 				mongo::OID RootKey;
-				int Max_Node = 0;
-				int Max_Leaf = 0;
+				int maxNode = 0;
+				int maxLeaf = 0;
 				string cn;
-				if (IO->RTree_GetParms(txn,DB_NAME, COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+				if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
-					// log()<<Max_Node<<","<<Max_Leaf;
-					_R.ReConfigure(Max_Node, Max_Leaf, RootKey, DB_NAME, COLLECTION_NAME);
+					// log()<<maxNode<<","<<maxLeaf;
+					_Rtree.ReConfigure(maxNode, maxLeaf, RootKey, dbName, collectionName);
                     //parseGeometry
 					geos::geom::Geometry * pGeometry = NULL;
-					if (IO->ParseGeometry(InputGeometry, pGeometry))//parseSuccess
+					if (_IO->parseGeometry(InputGeometry, pGeometry))//parseSuccess
 					{
-		                Node RootNode = _RIO->Basic_Find_One_Node(RootKey);
-						std::unique_ptr<RTreeRangeQueryCursor> returnCursor (new RTreeRangeQueryCursor(Max_Node, RootNode, _RIO, IO, pGeometry, DB_NAME, COLLECTION_NAME, cn, 1));
+		                Node RootNode = _RtreeIO->Basic_Find_One_Node(RootKey);
+						std::unique_ptr<RTreeRangeQueryCursor> returnCursor (new RTreeRangeQueryCursor(maxNode, RootNode, _RtreeIO, _IO, pGeometry, dbName, collectionName, cn, 1));
 						returnCursor->InitCursor();
 						return std::move(returnCursor);
 					}
@@ -297,27 +297,27 @@ namespace index_manager
 	}
 	
 	
-	std::unique_ptr<RTreeGeoNearCursor> IndexManagerBase::GeoSearchNear(OperationContext* txn, string DB_NAME,string COLLECTION_NAME,double ctx,double cty,double rMin,double rMax)
+	std::unique_ptr<RTreeGeoNearCursor> IndexManagerBase::GeoSearchNear(OperationContext* opCtx, string dbName,string collectionName,double ctx,double cty,double rMin,double rMax)
 	{
 		vector < mongo::OID >  ResultKeys;
 		vector<bool> lazyIntersects;
 		vector<mongo::OID> RefinedResultKeys;
 		vector<KeywithDis> toBeSort;
-		int index_type = IO->Basic_Get_Index_Type(txn, DB_NAME, COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx, dbName, collectionName);
 		if (index_type > 0)
 		{
 			if (index_type == 1)
 			{
 				mongo::OID RootKey;
-				int Max_Node = 0;
-				int Max_Leaf = 0;
+				int maxNode = 0;
+				int maxLeaf = 0;
 				string cn;
-				if (IO->RTree_GetParms(txn,DB_NAME, COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+				if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
-					_RIO->Configure(DB_NAME,COLLECTION_NAME,Max_Node,Max_Leaf);
-					Node rootNode = _RIO->Basic_Find_One_Node(RootKey);
+					_RtreeIO->Configure(dbName,collectionName,maxNode,maxLeaf);
+					Node rootNode = _RtreeIO->Basic_Find_One_Node(RootKey);
 					GeoNearSearchNode *RootN = new GeoNearSearchNode(0,9999999,111,rootNode);
-					std::unique_ptr<RTreeGeoNearCursor> TestCursor(new RTreeGeoNearCursor(Max_Node, RootN, _RIO, IO, ctx, cty, rMin, rMax,DB_NAME,COLLECTION_NAME,cn));
+					std::unique_ptr<RTreeGeoNearCursor> TestCursor(new RTreeGeoNearCursor(maxNode, RootN, _RtreeIO, _IO, ctx, cty, rMin, rMax,dbName,collectionName,cn));
 					TestCursor->InitCursor();
 					return std::move(TestCursor);
 				}
@@ -329,28 +329,28 @@ namespace index_manager
 	
 	
 	
-	int IndexManagerBase::DeleteGeoObjByKey(OperationContext* txn,string DB_NAME,string COLLECTION_NAME, mongo::OID key2delete)
+	int IndexManagerBase::DeleteGeoObjByKey(OperationContext* opCtx,string dbName,string collectionName, mongo::OID key2delete)
 	{
 		mongo::OID RootKey;
-		int Max_Node, Max_Leaf;
-		Max_Node = 0;
-		Max_Leaf = 0;
+		int maxNode, maxLeaf;
+		maxNode = 0;
+		maxLeaf = 0;
 		string cn;
-		IO->RTree_GetParms(txn,DB_NAME,COLLECTION_NAME, RootKey, Max_Node, Max_Leaf,cn);
-		_R.ReConfigure(Max_Node, Max_Leaf, RootKey, DB_NAME, COLLECTION_NAME);
+		_IO->rtreeSetInputParamsIfExists(opCtx,dbName,collectionName, RootKey, maxNode, maxLeaf,cn);
+		_Rtree.ReConfigure(maxNode, maxLeaf, RootKey, dbName, collectionName);
 		MBR m;
-		IO->RTree_GetDataMBR(DB_NAME,COLLECTION_NAME, m, key2delete, cn);
-		_R.DeleteNode(txn,RootKey, key2delete, m);
-		IO->RTree_ModifyRootKey(txn,DB_NAME,COLLECTION_NAME, RootKey);
-		IO->Basic_Delete_One_SpatialObj_Only(txn,DB_NAME,COLLECTION_NAME, key2delete);
+		_IO->rtreeSetDataMBR(dbName,collectionName, m, key2delete, cn);
+		_Rtree.DeleteNode(opCtx,RootKey, key2delete, m);
+		_IO->rteeModifyRootKey(opCtx,dbName,collectionName, RootKey);
+		_IO->basicDeleteNodeById(opCtx,dbName,collectionName, key2delete);
 		
 		return 1;
 	}
 
 	
-	int IndexManagerBase::DeleteIntersectedGeoObj(OperationContext* txn,string DB_NAME,string COLLECTION_NAME, mongo::BSONObj InputGeometry)
+	int IndexManagerBase::DeleteIntersectedGeoObj(OperationContext* opCtx,string dbName,string collectionName, mongo::BSONObj InputGeometry)
 	{
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME, COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName, collectionName);
 		vector<mongo::OID> RefinedResultKeys;
 		if (index_type > 0)
 		{
@@ -360,19 +360,19 @@ namespace index_manager
 				vector<bool> lazyIntersects;
 				mongo::OID RootKey;
 				string cn;
-				int Max_Node = 0;
-				int Max_Leaf = 0;
-				if (IO->RTree_GetParms(txn,DB_NAME, COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+				int maxNode = 0;
+				int maxLeaf = 0;
+				if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
 					 //parseGeometry
 					geos::geom::Geometry * pGeometry = NULL;
-					if (IO->ParseGeometry(InputGeometry, pGeometry))//parseSuccess
+					if (_IO->parseGeometry(InputGeometry, pGeometry))//parseSuccess
 					{
-					    _R.ReConfigure(Max_Node, Max_Leaf, RootKey, DB_NAME, COLLECTION_NAME);
-					    _R.Search(pGeometry, ResultKeys, lazyIntersects);
+					    _Rtree.ReConfigure(maxNode, maxLeaf, RootKey, dbName, collectionName);
+					    _Rtree.Search(pGeometry, ResultKeys, lazyIntersects);
 		   			    for (unsigned int i = 0; i < ResultKeys.size(); i++)
 					    {
-						    if (IO->Geo_Verify_Intersect(ResultKeys[i], pGeometry, lazyIntersects[i], DB_NAME, COLLECTION_NAME, cn))
+						    if (_IO->geoVerifyIntersect(ResultKeys[i], pGeometry, lazyIntersects[i], dbName, collectionName, cn))
 					    	{
 							    RefinedResultKeys.push_back(ResultKeys[i]);
 						    }
@@ -380,10 +380,10 @@ namespace index_manager
 					    for (unsigned int i = 0; i < RefinedResultKeys.size(); i++)
 					    {
 						    MBR datambr;
-					    	IO->RTree_GetDataMBR(DB_NAME, COLLECTION_NAME, datambr, RefinedResultKeys[i], cn);
-					    	_R.DeleteNode(txn,RootKey, RefinedResultKeys[i], datambr);
-						    IO->RTree_ModifyRootKey(txn,DB_NAME, COLLECTION_NAME, RootKey);
-					    	IO->Basic_Delete_One_SpatialObj_Only(txn,DB_NAME, COLLECTION_NAME, RefinedResultKeys[i]);
+					    	_IO->rtreeSetDataMBR(dbName, collectionName, datambr, RefinedResultKeys[i], cn);
+					    	_Rtree.DeleteNode(opCtx,RootKey, RefinedResultKeys[i], datambr);
+						    _IO->rteeModifyRootKey(opCtx,dbName, collectionName, RootKey);
+					    	_IO->basicDeleteNodeById(opCtx,dbName, collectionName, RefinedResultKeys[i]);
 					    }
 					}
 				}
@@ -395,10 +395,10 @@ namespace index_manager
 	
 	
 	
-	int IndexManagerBase::DeleteContainedGeoObj(OperationContext* txn,string DB_NAME,string COLLECTION_NAME, mongo::BSONObj InputGeometry)
+	int IndexManagerBase::DeleteContainedGeoObj(OperationContext* opCtx,string dbName,string collectionName, mongo::BSONObj InputGeometry)
 	{
 		// log()<<"DeleteContainedGeoObj";
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME, COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName, collectionName);
 		// log()<<"index_type:"<<index_type;
 		vector<mongo::OID> RefinedResultKeys;
 		if (index_type > 0)
@@ -409,21 +409,21 @@ namespace index_manager
 				vector<bool> lazyIntersects;
 				mongo::OID RootKey;
 				string cn;
-				int Max_Node = 0;
-				int Max_Leaf = 0;
-				if (IO->RTree_GetParms(txn,DB_NAME, COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+				int maxNode = 0;
+				int maxLeaf = 0;
+				if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
 					 //parseGeometry
 					geos::geom::Geometry * pGeometry = NULL;
-					if (IO->ParseGeometry(InputGeometry, pGeometry) )//parseSuccess
+					if (_IO->parseGeometry(InputGeometry, pGeometry) )//parseSuccess
 					{
 		              if (pGeometry->getGeometryType() == "MultiPolygon" || pGeometry->getGeometryType() == "Polygon")
 					  {	  
-					    _R.ReConfigure(Max_Node, Max_Leaf, RootKey, DB_NAME, COLLECTION_NAME);
-					    _R.Search(pGeometry, ResultKeys, lazyIntersects);
+					    _Rtree.ReConfigure(maxNode, maxLeaf, RootKey, dbName, collectionName);
+					    _Rtree.Search(pGeometry, ResultKeys, lazyIntersects);
 		   			    for (unsigned int i = 0; i < ResultKeys.size(); i++)
 					    {
-						    if (IO->Geo_Verify_Contain(ResultKeys[i], pGeometry, lazyIntersects[i], DB_NAME, COLLECTION_NAME, cn))
+						    if (_IO->geoVerifyContains(ResultKeys[i], pGeometry, lazyIntersects[i], dbName, collectionName, cn))
 					    	{
 							    RefinedResultKeys.push_back(ResultKeys[i]);
 						    }
@@ -431,10 +431,10 @@ namespace index_manager
 					    for (unsigned int i = 0; i < RefinedResultKeys.size(); i++)
 					    {
 						    MBR datambr;
-					    	IO->RTree_GetDataMBR(DB_NAME, COLLECTION_NAME, datambr, RefinedResultKeys[i], cn);
-					    	_R.DeleteNode(txn,RootKey, RefinedResultKeys[i], datambr);
-						    IO->RTree_ModifyRootKey(txn,DB_NAME, COLLECTION_NAME, RootKey);
-					    	IO->Basic_Delete_One_SpatialObj_Only(txn,DB_NAME, COLLECTION_NAME, RefinedResultKeys[i]);
+					    	_IO->rtreeSetDataMBR(dbName, collectionName, datambr, RefinedResultKeys[i], cn);
+					    	_Rtree.DeleteNode(opCtx,RootKey, RefinedResultKeys[i], datambr);
+						    _IO->rteeModifyRootKey(opCtx,dbName, collectionName, RootKey);
+					    	_IO->basicDeleteNodeById(opCtx,dbName, collectionName, RefinedResultKeys[i]);
 					    }
 					  }
 					}
@@ -449,12 +449,12 @@ namespace index_manager
 
 
 	
-	int IndexManagerBase::DropIndex(OperationContext* txn,string DB_NAME,string COLLECTIONNAME)
+	int IndexManagerBase::DropIndex(OperationContext* opCtx,string dbName,string COLLECTIONNAME)
 	{
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME,COLLECTIONNAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName,COLLECTIONNAME);
 		if (index_type <= 0)
 			return 0;
-		if (IO->RTree_DeleteIndex(txn,DB_NAME, COLLECTIONNAME))
+		if (_IO->rtreeDeleteIndex(opCtx,dbName, COLLECTIONNAME))
 			return 1;
 		return 0;
 	}
@@ -465,27 +465,27 @@ namespace index_manager
 		-1: unknown reason 
 	*/
 	
-	int IndexManagerBase::DropCollection(OperationContext* txn,string DB_NAME,string COLLECTIONNAME)
+	int IndexManagerBase::DropCollection(OperationContext* opCtx,string dbName,string COLLECTIONNAME)
 	{
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME,COLLECTIONNAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName,COLLECTIONNAME);
 		if (index_type <= 0)
 		{
-			IO->Basic_Drop_Storage(txn,DB_NAME,COLLECTIONNAME);
-			IO->Basic_DeleteOneGeoMeteData(txn,DB_NAME,COLLECTIONNAME);
+			_IO->basicDropStorage(opCtx,dbName,COLLECTIONNAME);
+			_IO->basicDeleteGeoMetadata(opCtx,dbName,COLLECTIONNAME);
 			return 0;
 		}
 		else
 		{
-			IO->RTree_DeleteIndex(txn,DB_NAME,COLLECTIONNAME);
-			IO->Basic_Drop_Storage(txn,DB_NAME,COLLECTIONNAME);
-			IO->Basic_DeleteOneGeoMeteData(txn,DB_NAME, COLLECTIONNAME);
+			_IO->rtreeDeleteIndex(opCtx,dbName,COLLECTIONNAME);
+			_IO->basicDropStorage(opCtx,dbName,COLLECTIONNAME);
+			_IO->basicDeleteGeoMetadata(opCtx,dbName, COLLECTIONNAME);
 			return 1;
 		}
 		return -1;
 	}
 
 	
-	int IndexManagerBase::RepairIndex(string DB_NAME,string COLLECTION_NAME)
+	int IndexManagerBase::RepairIndex(string dbName,string collectionName)
 	{
 
 		return 1;
@@ -498,33 +498,33 @@ namespace index_manager
 	  1:success
 	*/
 	
-	int IndexManagerBase::InsertIndexedDoc(OperationContext* txn,string DB_NAME, string COLLECTION_NAME, mongo::BSONObj AtomData, BSONObjBuilder& result)
+	int IndexManagerBase::InsertIndexedDoc(OperationContext* opCtx,string dbName, string collectionName, mongo::BSONObj AtomData, BSONObjBuilder& result)
 	{
-		int index_type = IO->Basic_Get_Index_Type(txn,DB_NAME,COLLECTION_NAME);
+		int index_type = _IO->basicGetIndexType(opCtx,dbName,collectionName);
 		if (index_type == 1)
 		{
 			mongo::OID RootKey;
-			int Max_Node = 0;
-			int Max_Leaf = 0;
+			int maxNode = 0;
+			int maxLeaf = 0;
 			string cn;
-			if (IO->RTree_GetParms(txn,DB_NAME,COLLECTION_NAME, RootKey, Max_Node, Max_Leaf, cn))
+			if (_IO->rtreeSetInputParamsIfExists(opCtx,dbName,collectionName, RootKey, maxNode, maxLeaf, cn))
 			{
-				_R.ReConfigure(Max_Node,Max_Leaf,RootKey,DB_NAME,COLLECTION_NAME);
+				_Rtree.ReConfigure(maxNode,maxLeaf,RootKey,dbName,collectionName);
 				
 				MBR m;
-				if (IO->RTree_GetDataMBR(AtomData, cn, m))
+				if (_IO->rtreeSetDataMBR(AtomData, cn, m))
 				{
 					//store Data 1st because data is more important
 					mongo::OID dataKeyAI;
 					// log() << "Data2Insert:"<<AtomData << endl;
-					IO->Basic_Store_One_Atom_Data(txn,DB_NAME, COLLECTION_NAME, AtomData, dataKeyAI, result);
+					_IO->basicInsertOneNode(opCtx,dbName, collectionName, AtomData, dataKeyAI, result);
 					Branch b;
 					b.ChildKey = dataKeyAI;
 					b.HasData = true;
 					b.mbr = m;
-					_R.Insert(txn,RootKey, b, 0);
+					_Rtree.Insert(opCtx,RootKey, b, 0);
 
-					IO->RTree_ModifyRootKey(txn,DB_NAME, COLLECTION_NAME, RootKey);
+					_IO->rteeModifyRootKey(opCtx,dbName, collectionName, RootKey);
 					return 1;
 				}
 			}
@@ -535,11 +535,11 @@ namespace index_manager
 	
 
 	
-	bool IndexManagerBase::InitalizeManager(MongoIndexManagerIO *USER_INDEXMANAGER_IO, MongoIO *USER_RTREE_IO)
+	bool IndexManagerBase::InitalizeManager(MongoIndexManagerIO *userIndexManagerIO, MongoIO *userRtreeIO)
 	{
-		IO = USER_INDEXMANAGER_IO;
-		_RIO = USER_RTREE_IO;
-		_R.IO = _RIO;
+		_IO = userIndexManagerIO;
+		_RtreeIO = userRtreeIO;
+		_Rtree.IO = _RtreeIO;
 		return true;
 	}
 

@@ -228,9 +228,9 @@ namespace mongo
                                   std::string &errmsg,
                                   BSONObjBuilder &output)
             {
-                if (!pIndexManagerIO->IsConnected())
+                if (!pIndexManagerIO->isConnected())
                     pIndexManagerIO->connectMyself();
-                if (!pRTreeIO->IsConnected())
+                if (!pRTreeIO->isConnected())
                     pRTreeIO->connectMyself();
                 BSONObjBuilder rtreepara;
                 rtreepara.append("collectionName", cmdObj["createIndexes"].str());

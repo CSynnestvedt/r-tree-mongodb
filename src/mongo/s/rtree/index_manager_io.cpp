@@ -1,20 +1,20 @@
 /**
-*    Copyright (C) 2015 LIESMARS, Wuhan University.
-*    Financially supported by Wuda Geoinfamatics Co. ,Ltd.
-*    Author:  Xiang Longgang, Wang Dehao , Shao Xiaotian
-*
-*    This program is free software: you can redistribute it and/or  modify
-*    it under the terms of the GNU Affero General Public License, version 3,
-*    as published by the Free Software Foundation.
-*
-*    This program is distributed in the hope that it will be useful,
-*    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*    GNU Affero General Public License for more details.
-*
-*    You should have received a copy of the GNU Affero General Public License
-*    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ *    Copyright (C) 2015 LIESMARS, Wuhan University.
+ *    Financially supported by Wuda Geoinfamatics Co. ,Ltd.
+ *    Author:  Xiang Longgang, Wang Dehao , Shao Xiaotian
+ *
+ *    This program is free software: you can redistribute it and/or  modify
+ *    it under the terms of the GNU Affero General Public License, version 3,
+ *    as published by the Free Software Foundation.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Affero General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Affero General Public License
+ *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include "index_manager_io.h"
 #include "mongo/s/catalog/type_indexmetadata.h"
@@ -37,38 +37,38 @@ namespace index_manager
 {
 	stdx::mutex _INDEXMANAGERIO_mu;
 
-	
-	
-    MongoIndexManagerIO::MongoIndexManagerIO(DBClientBase * USER_CONN)
+	MongoIndexManagerIO::MongoIndexManagerIO(DBClientBase *USER_CONN)
 	{
 		_conn = 0;
 		//_conn = USER_CONN;
 	}
 
-	bool  MongoIndexManagerIO::connectMyself()
+	bool MongoIndexManagerIO::connectMyself()
 	{
 		std::string errmsg;
 		string url = "localhost:" + boost::lexical_cast<string>(serverGlobalParams.port);
-		ConnectionString cs = ConnectionString::parse( url).getValue();
-       // ConnectionString cs(ConnectionString::parse(connectionString));
-        if (!cs.isValid()) {
-           cout << "error parsing url: " << errmsg << endl;
-           return false;
-        }
+		ConnectionString cs = ConnectionString::parse(url).getValue();
+		// ConnectionString cs(ConnectionString::parse(connectionString));
+		if (!cs.isValid())
+		{
+			cout << "error parsing url: " << errmsg << endl;
+			return false;
+		}
 		// std::string logMessage = "see what the connection string is: " + std::to_string(cs) + "\n"
 		// LOGV2(40001, logMessage);
-		_conn= cs.connect(errmsg).getValue().get();
-        if (!_conn) {
-            cout << "couldn't connect: " << errmsg << endl;
+		_conn = cs.connect(errmsg).getValue().get();
+		if (!_conn)
+		{
+			cout << "couldn't connect: " << errmsg << endl;
 			return false;
-        }
-		 
+		}
+
 		return true;
 	}
 
-	bool  MongoIndexManagerIO::IsConnected()
+	bool MongoIndexManagerIO::isConnected()
 	{
-		if (_conn!=0&&this->_conn->isStillConnected())
+		if (_conn != 0 && this->_conn->isStillConnected())
 			return true;
 		else
 			return false;
@@ -79,78 +79,77 @@ namespace index_manager
 		return mongo::OID::gen();
 	}
 
-	mongo::BSONObj MongoIndexManagerIO::Basic_Fetch_AtomData(string DB_NAME, string STORAGE_NAME, mongo::OID Data2Fetch)
+	mongo::BSONObj MongoIndexManagerIO::basicFindNodeById(string dbName, string storageName, mongo::OID Data2Fetch)
 	{
 		/*findOne*/
 		BSONObjBuilder bdr;
-		bdr.append("_id",Data2Fetch);
+		bdr.append("_id", Data2Fetch);
 		/*
 		 * please note that this _conn for indexmanagerIO
 		 * is shared by many threads. just like RTreeIO _conn
 		 * so lock it 1st
 		 */
-		 BSONObj returnBSONOBJ;
+		BSONObj returnBSONOBJ;
 		{
 			stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
-			if(!IsConnected())
+			if (!isConnected())
 			{
 				connectMyself();
 			}
-			NamespaceString ns = NamespaceString(DB_NAME + "." + STORAGE_NAME);
-		    returnBSONOBJ =_conn->findOne(ns, bdr.obj());
+			NamespaceString ns = NamespaceString(dbName + "." + storageName);
+			returnBSONOBJ = _conn->findOne(ns, bdr.obj());
 		}
 		return returnBSONOBJ;
 	}
 
-
-	bool MongoIndexManagerIO::Basic_Store_One_Atom_Data(OperationContext* txn,string DB_NAME, string STORAGE_NAME, mongo::BSONObj AtomData, mongo::OID &AtomKey, BSONObjBuilder& result)
+	bool MongoIndexManagerIO::basicInsertOneNode(OperationContext *opCtx, string dbName, string storageName, mongo::BSONObj atomData, mongo::OID &AtomKey, BSONObjBuilder &result)
 	{
 		BSONObjBuilder bdr;
-		AtomKey = AtomData["_id"].OID();
-		//bdr.append("_id", AtomKey);
-		bdr.appendElements(AtomData);
+		AtomKey = atomData["_id"].OID();
+		// bdr.append("_id", AtomKey);
+		bdr.appendElements(atomData);
 		/*insert*/
 		bool ok;
-		ok = RunWriteCommand(txn,DB_NAME, STORAGE_NAME, bdr.obj(), INSERT,result);
-		//_conn->insert(DB_NAME + "." + STORAGE_NAME, AtomData);
+		ok = RunWriteCommand(opCtx, dbName, storageName, bdr.obj(), INSERT, result);
+		//_conn->insert(dbName + "." + storageName, atomData);
 		return 1;
 	}
 
-	bool MongoIndexManagerIO::Basic_Drop_Storage(OperationContext* txn,string DB_NAME, string STORAGE_NAME)
+	bool MongoIndexManagerIO::basicDropStorage(OperationContext *opCtx, string dbName, string storageName)
 	{
 		/*drop*/
 		BSONObj empty;
 		BSONObjBuilder bdr;
-		BSONObjBuilder & bdrRef=bdr;
-		return RunWriteCommand(txn,DB_NAME, STORAGE_NAME, empty, DROP,bdrRef);
+		BSONObjBuilder &bdrRef = bdr;
+		return RunWriteCommand(opCtx, dbName, storageName, empty, DROP, bdrRef);
 	}
 
-	int MongoIndexManagerIO::Basic_Delete_One_SpatialObj_Only(OperationContext* txn,string DB_NAME, string STORAGE_NAME, mongo::OID key2delete)
+	int MongoIndexManagerIO::basicDeleteNodeById(OperationContext *opCtx, string dbName, string storageName, mongo::OID key2delete)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("_id",key2delete);
+		bdr.append("_id", key2delete);
 		/*remove*/
-		//_conn->remove(_dbName + "." + STORAGE_NAME, bdr.obj());
+		//_conn->remove(_dbName + "." + storageName, bdr.obj());
 		bool ok;
-		
+
 		BSONObjBuilder newBdr;
-		BSONObjBuilder & newBdrRef=newBdr;
-		ok = RunWriteCommand(txn,DB_NAME, STORAGE_NAME, bdr.obj(), REMOVE,newBdrRef);
+		BSONObjBuilder &newBdrRef = newBdr;
+		ok = RunWriteCommand(opCtx, dbName, storageName, bdr.obj(), REMOVE, newBdrRef);
 		return 1;
 	}
 
-	int MongoIndexManagerIO::Basic_Get_Index_Type(OperationContext* txn,string DB_NAME,string STORAGE_NAME)
+	int MongoIndexManagerIO::basicGetIndexType(OperationContext *opCtx, string dbName, string storageName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
+		bdr.append("datanamespace", dbName + "." + storageName);
 
 		/*findOne*/
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-        uassertStatusOK(status.getStatus());
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
 
-		//DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
-		BSONObj oneGeoMeta = Grid::get(txn)->shardRegistry()->getGeometry(txn, bdr.obj());
+		// DBConfigPtr conf = grid.getDBConfig(dbName, false);
+		BSONObj oneGeoMeta = Grid::get(opCtx)->shardRegistry()->getGeometry(opCtx, bdr.obj());
 
 		if (oneGeoMeta.isEmpty())
 		{
@@ -162,18 +161,17 @@ namespace index_manager
 			return index_type;
 		}
 		return -1;
-		
 	}
 
-	bool MongoIndexManagerIO::Basic_Exist_Storage(string DB_NAME,string STORAGE_NAME)
+	bool MongoIndexManagerIO::basicStorageExists(string dbName, string storageName)
 	{
 		/*EXIST*/
 		stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
-		if(!IsConnected())
+		if (!isConnected())
 		{
-				connectMyself();
+			connectMyself();
 		}
-		if (_conn->exists(DB_NAME + "." + STORAGE_NAME))
+		if (_conn->exists(dbName + "." + storageName))
 		{
 			return true;
 		}
@@ -183,11 +181,11 @@ namespace index_manager
 		}
 	}
 
-	int MongoIndexManagerIO::Basic_StorageOneGeoMeteData(OperationContext* txn,string DB_NAME, string STORAGE_NAME, string COLUMN_NAME, int INDEX_TYPE, MBR m, int GTYPE, int SRID, int CRS_TYPE, double TOLERANCE)
+	int MongoIndexManagerIO::basicInsertGeoMetadata(OperationContext *opCtx, string dbName, string storageName, string columnName, int INDEX_TYPE, MBR m, int GTYPE, int SRID, int CRS_TYPE, double TOLERANCE)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
-		bdr.append("column_name", COLUMN_NAME);
+		bdr.append("datanamespace", dbName + "." + storageName);
+		bdr.append("column_name", columnName);
 		bdr.append("index_type", INDEX_TYPE);
 		OID tempOID;
 		bdr.append("index_info", tempOID);
@@ -201,55 +199,53 @@ namespace index_manager
 		bdr.append("srid", SRID);
 		bdr.append("crs_type", CRS_TYPE);
 		bdr.append("tolerance", TOLERANCE);
-		/*insert*/
-        //auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-        uassertStatusOK(status.getStatus());
-        bool result = Grid::get(txn)->shardRegistry()->registerGeometry(txn, bdr.obj());
-		// DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
-	    // conf->registerGeometry(txn,bdr.obj());
+
+		// insert
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		bool result = Grid::get(opCtx)->shardRegistry()->registerGeometry(opCtx, bdr.obj());
 		return result;
 	}
 
-	int MongoIndexManagerIO::Basic_DeleteOneGeoMeteData(OperationContext* txn,string DB_NAME,string STORAGE_NAME)
+	int MongoIndexManagerIO::basicDeleteGeoMetadata(OperationContext *opCtx, string dbName, string storageName)
 	{
 		BSONObjBuilder querybdr;
-		querybdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-        uassertStatusOK(status.getStatus());
-		Grid::get(txn)->shardRegistry()->deleteGeometry(txn, querybdr.obj());
-        // shared_ptr<DBConfig> conf = status.getValue();
-		//DBConfigPtr conf = grid.getDBConfig(DB_NAME, false);
-		// conf->deleteGeometry(txn,querybdr.obj());
+		querybdr.append("datanamespace", dbName + "." + storageName);
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		Grid::get(opCtx)->shardRegistry()->deleteGeometry(opCtx, querybdr.obj());
+		// shared_ptr<DBConfig> conf = status.getValue();
+		// DBConfigPtr conf = grid.getDBConfig(dbName, false);
+		// conf->deleteGeometry(opCtx,querybdr.obj());
 		return 1;
 	}
 
-	int MongoIndexManagerIO::Basic_ModifyIndexType(OperationContext* txn,string DB_NAME, string STORAGE_NAME, int Type2Modify)
+	int MongoIndexManagerIO::basicModifyIndexType(OperationContext *opCtx, string dbName, string storageName, int Type2Modify)
 	{
 		BSONObjBuilder condition;
-		condition.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
+		condition.append("datanamespace", dbName + "." + storageName);
 		BSONObjBuilder setBuilder;
 		BSONObjBuilder setConditionBuilder;
 		setConditionBuilder.append("index_type", Type2Modify);
 		setBuilder.append("$set", setConditionBuilder.obj());
 
-		//BSONObjBuilder cmdObj;
-		//cmdObj.append("query", condition.obj());
-		//cmdObj.append("update", setBuilder.obj());
-		//bool ok;
-		//ok = RunWriteCommand(DB_NAME, GeoMeteDataName, cmdObj.obj(), UPDATE);
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-        uassertStatusOK(status.getStatus());
-        auto conf = Grid::get(txn)->shardRegistry();
-		conf->updateGeometry(txn,condition.obj(), setBuilder.obj());
+		// BSONObjBuilder cmdObj;
+		// cmdObj.append("query", condition.obj());
+		// cmdObj.append("update", setBuilder.obj());
+		// bool ok;
+		// ok = RunWriteCommand(dbName, GeoMeteDataName, cmdObj.obj(), UPDATE);
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		conf->updateGeometry(opCtx, condition.obj(), setBuilder.obj());
 		/*updata*/
 		//_conn->update(_dbName + "." + GeoMeteDataName, Query(condition.obj()), setBuilder.obj());
 		if (Type2Modify == 0)
 		{
 			BSONObjBuilder condition1;
-			condition1.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
+			condition1.append("datanamespace", dbName + "." + storageName);
 			BSONObjBuilder setBuilder1;
 			BSONObjBuilder setConditionBuilder1;
 			mongo::OID nullOID;
@@ -257,57 +253,51 @@ namespace index_manager
 			setBuilder1.append("$set", setConditionBuilder1.obj());
 
 			/*updata*/
-			conf->updateGeometry(txn,condition.obj(), setBuilder1.obj());
+			conf->updateGeometry(opCtx, condition.obj(), setBuilder1.obj());
 		}
 
 		return 1;
 	}
 
-	int MongoIndexManagerIO::Basic_ModifyIndexMeteDataKey(OperationContext* txn,string DB_NAME, string STORAGE_NAME, mongo::OID Key2Modify)
+	int MongoIndexManagerIO::basicModifyIndexMetadataKey(OperationContext *opCtx, string dbName, string storageName, mongo::OID Key2Modify)
 	{
-		
+
 		BSONObjBuilder condition;
-		condition.append("NAMESPACE", DB_NAME+"."+STORAGE_NAME);
+		condition.append("NAMESPACE", dbName + "." + storageName);
 		BSONObjBuilder setBuilder;
 		BSONObjBuilder setConditionBuilder;
 		setConditionBuilder.append("index_info", Key2Modify);
 		setBuilder.append("$set", setConditionBuilder.obj());
-		//BSONObjBuilder cmdObj;
-		//cmdObj.append("query", condition.obj());
-		//cmdObj.append("update", setBuilder.obj());
-		//bool ok;
-		//ok = RunWriteCommand(DB_NAME, GeoMeteDataName, cmdObj.obj(), UPDATE);
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-        uassertStatusOK(status.getStatus());
-		Grid::get(txn)->shardRegistry()->updateGeometry(txn, condition.obj(), setBuilder.obj());
+		// BSONObjBuilder cmdObj;
+		// cmdObj.append("query", condition.obj());
+		// cmdObj.append("update", setBuilder.obj());
+		// bool ok;rtreeInsertIndexMetaData
+		// ok = RunWriteCommand(dbName, GeoMeteDataName, cmdObj.obj(), UPDATE);
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		Grid::get(opCtx)->shardRegistry()->updateGeometry(opCtx, condition.obj(), setBuilder.obj());
 
-        // shared_ptr<DBConfig> conf = status.getValue();
-		// conf->updateGeometry(txn,condition.obj(), setBuilder.obj());
+		// shared_ptr<DBConfig> conf = status.getValue();
+		// conf->updateGeometry(opCtx,condition.obj(), setBuilder.obj());
 		/*updata*/
 		//_conn->update(_dbName + "." + GeoMeteDataName, Query(condition.obj()), setBuilder.obj());
 
 		return 1;
 	}
 
-	bool MongoIndexManagerIO::Basic_Exist_Geo_MeteData(OperationContext* txn,string DB_NAME, string STORAGE_NAME)
+	bool MongoIndexManagerIO::basicGeoMetadataExists(OperationContext *opCtx, string dbName, string storageName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("NAMESPACE",DB_NAME+"."+STORAGE_NAME);
-		//log() << "checkgeo:" << DB_NAME + "." + STORAGE_NAME << endl;
-		/*findOne*/
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-        // uassertStatusOK(status.getStatus());
-        // shared_ptr<DBConfig> conf = status.getValue();
-	    auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());
+		bdr.append("NAMESPACE", dbName + "." + storageName);
+		;
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
 
-		//shared_ptr<DBConfig> conf =
-        //        uassertStatusOK(grid.catalogCache()->getDatabase(txn, DB_NAME));
-		return Grid::get(txn)->shardRegistry()->checkGeoExist(txn, bdr.obj());
+		return Grid::get(opCtx)->shardRegistry()->checkGeoExist(opCtx, bdr.obj());
 	}
 
-	int MongoIndexManagerIO::RTree_StorageIndexMeteData(Transaction* t,string STORAGE_NAME, int MAX_NODE, int MAX_LEAF, mongo::OID RootKey)
+	int MongoIndexManagerIO::rtreeInsertIndexMetaData(Transaction *t, string storageName, int MAX_NODE, int MAX_LEAF, mongo::OID RootKey)
 	{
 		BSONObjBuilder bdr;
 		mongo::OID Index_INFO_OID = OID::gen();
@@ -315,35 +305,35 @@ namespace index_manager
 		bdr.append("max_node", MAX_NODE);
 		bdr.append("max_leaf", MAX_LEAF);
 		bdr.append("index_root", RootKey);
-        string DB_NAME = t->getDBName();
-		OperationContext* txn = t->getOperationContext();
+		string dbName = t->getDBName();
+		OperationContext *opCtx = t->getOperationContext();
 
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());
-        auto conf = Grid::get(txn)->shardRegistry();
-		conf->insertIndexMetadata(txn,bdr.obj());
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		conf->insertIndexMetadata(opCtx, bdr.obj());
 		t->InsertDone(0, "config.meta_rtree", rtree_index::INSERT, "insertIndexMetadata");
-		Basic_ModifyIndexMeteDataKey(txn, DB_NAME,STORAGE_NAME, Index_INFO_OID);
-		t->UpdateDone(1, "config.meta_rtree", rtree_index::UPDATE, "Basic_ModifyIndexMeteDataKey");
-		Basic_ModifyIndexType(txn, DB_NAME, STORAGE_NAME, 1);
-		t->UpdateDone(2, "config.meta_rtree", rtree_index::UPDATE, "Basic_ModifyIndexType");
+		basicModifyIndexMetadataKey(opCtx, dbName, storageName, Index_INFO_OID);
+		t->UpdateDone(1, "config.meta_rtree", rtree_index::UPDATE, "basicModifyIndexMetadataKey");
+		basicModifyIndexType(opCtx, dbName, storageName, 1);
+		t->UpdateDone(2, "config.meta_rtree", rtree_index::UPDATE, "basicModifyIndexType");
 		return 1;
 	}
 
-	bool MongoIndexManagerIO::RTree_GetParms(OperationContext* txn,string DB_NAME,string STORAGE_NAME, mongo::OID &theRoot, int &MAX_NODE, int & MAX_LEAF, string &COLUMN_NAME)
+	bool MongoIndexManagerIO::rtreeSetInputParamsIfExists(OperationContext *opCtx, string dbName, string storageName, mongo::OID &theRoot, int &MAX_NODE, int &MAX_LEAF, string &columnName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
-		
+		bdr.append("datanamespace", dbName + "." + storageName);
+
 		/*findOne*/
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());
-        auto conf = Grid::get(txn)->shardRegistry();
-		BSONObj Geo = conf->getGeometry(txn,bdr.obj());
-		//BSONObj Geo = _conn->findOne(DB_NAME+"."+GeoMeteDataName,bdr.obj());
-		//log() << "Geoooooo:" << Geo << endl;
-		COLUMN_NAME = Geo["column_name"].String();
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		BSONObj Geo = conf->getGeometry(opCtx, bdr.obj());
+		// BSONObj Geo = _conn->findOne(dbName+"."+GeoMeteDataName,bdr.obj());
+		// log() << "Geoooooo:" << Geo << endl;
+		columnName = Geo["column_name"].String();
 
 		if (Geo["index_type"].Int() == 1)
 		{
@@ -352,7 +342,7 @@ namespace index_manager
 			indexquerybdr.append("_id", index_info_oid);
 
 			/*findOne*/
-			BSONObj index_info = conf->getIndexMetadata(txn,indexquerybdr.obj());
+			BSONObj index_info = conf->getIndexMetadata(opCtx, indexquerybdr.obj());
 
 			theRoot = index_info["index_root"].OID();
 			MAX_NODE = index_info["max_node"].Int();
@@ -361,18 +351,18 @@ namespace index_manager
 		return true;
 	}
 
-	int MongoIndexManagerIO::RTree_ModifyRootKey(OperationContext* txn,string DB_NAME, string STORAGE_NAME, mongo::OID newRootKey)
+	int MongoIndexManagerIO::rteeModifyRootKey(OperationContext *opCtx, string dbName, string storageName, mongo::OID newRootKey)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
+		bdr.append("datanamespace", dbName + "." + storageName);
 
 		/*findOne*/
-		//BSONObj Geo = _conn->findOne(DB_NAME + "." + GeoMeteDataName, bdr.obj());
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());
-        auto conf = Grid::get(txn)->shardRegistry();
-		BSONObj Geo = conf->getGeometry(txn,bdr.obj());
+		// BSONObj Geo = _conn->findOne(dbName + "." + GeoMeteDataName, bdr.obj());
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		BSONObj Geo = conf->getGeometry(opCtx, bdr.obj());
 
 		BSONObjBuilder condition;
 		condition.append("_id", Geo["index_info"].OID());
@@ -381,13 +371,13 @@ namespace index_manager
 		setConditionBuilder.append("index_root", newRootKey);
 		setBuilder.append("$set", setConditionBuilder.obj());
 
-	//	BSONObjBuilder cmdObj;
-	//	cmdObj.append("query", condition.obj());
-	//	cmdObj.append("update", setBuilder.obj());
+		//	BSONObjBuilder cmdObj;
+		//	cmdObj.append("query", condition.obj());
+		//	cmdObj.append("update", setBuilder.obj());
 
-		conf->updateIndexMetadata(txn,condition.obj(), setBuilder.obj());
-		//bool ok;
-		//ok = RunWriteCommand(DB_NAME, RTreeIndexMetaData, cmdObj.obj(), UPDATE);
+		conf->updateIndexMetadata(opCtx, condition.obj(), setBuilder.obj());
+		// bool ok;
+		// ok = RunWriteCommand(dbName, RTreeIndexMetaData, cmdObj.obj(), UPDATE);
 
 		/*updata*/
 		//_conn->update(_dbName + "." + RTreeIndexMetaData, Query(condition.obj()), setBuilder.obj());
@@ -395,88 +385,89 @@ namespace index_manager
 		return 1;
 	}
 
-	bool MongoIndexManagerIO::RTree_DeleteIndex(OperationContext* txn,string DB_NAME, string STORAGE_NAME)
+	bool MongoIndexManagerIO::rtreeDeleteIndex(OperationContext *opCtx, string dbName, string storageName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
+		bdr.append("datanamespace", dbName + "." + storageName);
 
 		/*findOne*/
-		//BSONObj Geo = _conn->findOne(DB_NAME + "." + GeoMeteDataName, bdr.obj());
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());
-        auto conf = Grid::get(txn)->shardRegistry();
-		BSONObj Geo = conf->getGeometry(txn,bdr.obj());
+		// BSONObj Geo = _conn->findOne(dbName + "." + GeoMeteDataName, bdr.obj());
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		BSONObj Geo = conf->getGeometry(opCtx, bdr.obj());
 
 		BSONObjBuilder condition;
 		condition.append("_id", Geo["index_info"].OID());
 		/*remove*/
 		//_conn->remove(_dbName + "." + RTreeIndexMetaData, condition.obj());
-		//ok = RunWriteCommand(DB_NAME, RTreeIndexMetaData, condition.obj(), REMOVE);
-		conf->deleteIndexMetadata(txn,condition.obj());
+		// ok = RunWriteCommand(dbName, RTreeIndexMetaData, condition.obj(), REMOVE);
+		conf->deleteIndexMetadata(opCtx, condition.obj());
 
 		/*Exist*/
 		{
-		stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
-		if(!IsConnected())
-		{
-			connectMyself();
-		}
-		if (_conn->exists(DB_NAME + "." + "rtree_" + STORAGE_NAME))
-		{
-			/*Drop*/
-			_conn->dropCollection(DB_NAME + "." + "rtree_" + STORAGE_NAME);
-		}
+			stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
+			if (!isConnected())
+			{
+				connectMyself();
+			}
+			if (_conn->exists(dbName + "." + "rtree_" + storageName))
+			{
+				/*Drop*/
+				_conn->dropCollection(dbName + "." + "rtree_" + storageName);
+			}
 		}
 
-		Basic_DeleteOneGeoMeteData(txn,DB_NAME, STORAGE_NAME);
+		basicDeleteGeoMetadata(opCtx, dbName, storageName);
 
 		return 1;
 	}
 
-	bool MongoIndexManagerIO::RTree_ExistIndex(OperationContext* txn,string DB_NAME,string STORAGE_NAME)
+	bool MongoIndexManagerIO::rtreeIndexExists(OperationContext *opCtx, string dbName, string storageName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace", DB_NAME+"."+STORAGE_NAME);
+		bdr.append("datanamespace", dbName + "." + storageName);
 		/*findOne*/
-		//BSONObj Geo = _conn->findOne(DB_NAME + "." + GeoMeteDataName, bdr.obj());
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());;
-        auto conf = Grid::get(txn)->shardRegistry();
-		return conf->rtreeExists(txn,bdr.obj());
+		// BSONObj Geo = _conn->findOne(dbName + "." + GeoMeteDataName, bdr.obj());
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		;
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		return conf->rtreeExists(opCtx, bdr.obj());
 	}
 
-	bool MongoIndexManagerIO::RTree_GetDataMBR(string DB_NAME,string STORAGE_NAME, MBR &returnMBR, mongo::OID DataNodeKey, string COLUMN_NAME)
+	bool MongoIndexManagerIO::rtreeSetDataMBR(string dbName, string storageName, MBR &returnMBR, mongo::OID dataNodeKey, string columnName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("_id",DataNodeKey);
+		bdr.append("_id", dataNodeKey);
 		/*findOne*/
 		BSONObj oneDoc;
 		stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
-        {
-			if(!IsConnected())
+		{
+			if (!isConnected())
 			{
 				connectMyself();
 			}
-			NamespaceString ns = NamespaceString(DB_NAME+"."+STORAGE_NAME);
-	    	oneDoc = _conn->findOne(ns, bdr.obj());
-		}		
+			NamespaceString ns = NamespaceString(dbName + "." + storageName);
+			oneDoc = _conn->findOne(ns, bdr.obj());
+		}
 		if (oneDoc.isEmpty())
 		{
 			return false;
 		}
 
-		BSONObj GeoObj = oneDoc[COLUMN_NAME].Obj();
+		BSONObj GeoObj = oneDoc[columnName].Obj();
 
 		geojson_engine::GeoJSONPaser::VerifyGeoBSONType(GeoObj, returnMBR);
 		return true;
 	}
 
-	bool MongoIndexManagerIO::RTree_GetDataMBR(mongo::BSONObj AtomData, string COLUMN_NAME, MBR &returnMBR)
+	bool MongoIndexManagerIO::rtreeSetDataMBR(mongo::BSONObj atomData, string columnName, MBR &returnMBR)
 	{
-		BSONObj GeoObj = AtomData[COLUMN_NAME].Obj();
-		if (AtomData.hasField(COLUMN_NAME))
+		BSONObj GeoObj = atomData[columnName].Obj();
+		if (atomData.hasField(columnName))
 		{
 			geojson_engine::GeoJSONPaser::VerifyGeoBSONType(GeoObj, returnMBR);
 			return true;
@@ -484,33 +475,33 @@ namespace index_manager
 		return false;
 	}
 
-	void MongoIndexManagerIO::Basic_Init_Storage_Traverse(OperationContext* txn,string DB_NAME,string STORAGE_NAME)
+	void MongoIndexManagerIO::basicInitStorageTraverse(OperationContext *opCtx, string dbName, string storageName)
 	{
-		_Current_Storage = STORAGE_NAME;
+		_currentStorage = storageName;
 		/*query*/
 		{
 			stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
-			if(!IsConnected())
+			if (!isConnected())
 			{
 				connectMyself();
 			}
-			FindCommandRequest request(NamespaceStringOrUUID{NamespaceString(DB_NAME+"."+_Current_Storage)});
+			FindCommandRequest request(NamespaceStringOrUUID{NamespaceString(dbName + "." + _currentStorage)});
 			request.setReadConcern(
-			repl::ReadConcernArgs(repl::ReadConcernLevel::kMajorityReadConcern)
-				.toBSONInner());
+				repl::ReadConcernArgs(repl::ReadConcernLevel::kMajorityReadConcern)
+					.toBSONInner());
 
-			_Current_Cursor = _conn->find(request);
+			_currentCursor = _conn->find(request);
 		}
 		BSONObjBuilder bdr;
-		bdr.append("NAMESPACE",DB_NAME+"."+STORAGE_NAME);
+		bdr.append("datanamespace  ", dbName + "." + storageName);
 		/*findOne*/
-		//BSONObj oneGeoMeteData = _conn->findOne(DB_NAME + "." + GeoMeteDataName, bdr.obj());
-		//auto status = grid.catalogCache()->getDatabase(txn, DB_NAME);
-		auto status = Grid::get(txn)->catalogCache()->getDatabase(txn, DB_NAME);
-	    uassertStatusOK(status.getStatus());
-        auto conf = Grid::get(txn)->shardRegistry();
-		BSONObj oneGeoMetaData = conf->getGeometry(txn,bdr.obj());
-		_COLUMN_NAME = oneGeoMetaData["column_name"].String();
+		// BSONObj oneGeoMeteData = _conn->findOne(dbName + "." + GeoMeteDataName, bdr.obj());
+		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto conf = Grid::get(opCtx)->shardRegistry();
+		BSONObj oneGeoMetaData = conf->getGeometry(opCtx, bdr.obj());
+		_columnName = oneGeoMetaData["column_name"].String();
 	}
 
 	/*
@@ -518,16 +509,16 @@ namespace index_manager
 	  -1: Not Ok ,error Data
 	  0: Traverse Over
 	*/
-	int MongoIndexManagerIO::Basic_Storage_Traverse_Next(MBR &returnMBR, mongo::OID &returnKey)
+	int MongoIndexManagerIO::basicStorageTraverseNext(MBR &returnMBR, mongo::OID &returnKey)
 	{
 		/*more*/
-		if (_Current_Cursor->more())
+		if (_currentCursor->more())
 		{
 			/*next*/
-			BSONObj oneDoc = _Current_Cursor->next();
+			BSONObj oneDoc = _currentCursor->next();
 			returnKey = oneDoc["_id"].OID();
-			
-			BSONObj GeoJSONObj = oneDoc[_COLUMN_NAME].Obj();
+
+			BSONObj GeoJSONObj = oneDoc[_columnName].Obj();
 			if (geojson_engine::GeoJSONPaser::VerifyGeoBSONType(GeoJSONObj, returnMBR))
 			{
 				return 1;
@@ -541,12 +532,12 @@ namespace index_manager
 		return 0;
 	}
 
-	DBClientBase * MongoIndexManagerIO::Basic_Get_Connection()
+	DBClientBase *MongoIndexManagerIO::basicGetConnection()
 	{
 		return _conn;
 	}
 
-	bool MongoIndexManagerIO::Geo_Verify_Intersect(mongo::OID childOID, geos::geom::Geometry *searchGeometry, bool Conditions, string DB_NAME, string STORAGE_NAME, string COLUMN_NAME)
+	bool MongoIndexManagerIO::geoVerifyIntersect(mongo::OID childOID, geos::geom::Geometry *searchGeometry, bool Conditions, string dbName, string storageName, string columnName)
 	{
 		if (Conditions)
 		{
@@ -555,13 +546,14 @@ namespace index_manager
 		else
 		{
 
-			BSONObj atomdata = Basic_Fetch_AtomData(DB_NAME, STORAGE_NAME, childOID);
-			BSONObj geoObj = atomdata[COLUMN_NAME].Obj();
-			if (geoObj.isEmpty())return false;
+			BSONObj atomdata = basicFindNodeById(dbName, storageName, childOID);
+			BSONObj geoObj = atomdata[columnName].Obj();
+			if (geoObj.isEmpty())
+				return false;
 			geom::Geometry *pGeometry = NULL;
-			int parseSt = MGP.DataType2Geometry(geoObj, pGeometry);
+			int parseSt = _MGP.DataType2Geometry(geoObj, pGeometry);
 			bool returnValue = false;
-			if (parseSt == 1)//parseSuccess
+			if (parseSt == 1) // parseSuccess
 			{
 				if (pGeometry->intersects(searchGeometry))
 				{
@@ -571,10 +563,9 @@ namespace index_manager
 			delete pGeometry;
 			return returnValue;
 		}
-
 	}
 
-	bool MongoIndexManagerIO::Geo_Verify_Contain(mongo::OID childOID, geos::geom::Geometry *searchGeometry, bool Conditions, string DB_NAME, string STORAGE_NAME, string COLUMN_NAME)
+	bool MongoIndexManagerIO::geoVerifyContains(mongo::OID childOID, geos::geom::Geometry *searchGeometry, bool Conditions, string dbName, string storageName, string columnName)
 	{
 		if (Conditions)
 		{
@@ -583,13 +574,14 @@ namespace index_manager
 		else
 		{
 
-			BSONObj atomdata = Basic_Fetch_AtomData(DB_NAME, STORAGE_NAME, childOID);
-			BSONObj geoObj = atomdata[COLUMN_NAME].Obj();
-			if (geoObj.isEmpty())return false;
+			BSONObj atomdata = basicFindNodeById(dbName, storageName, childOID);
+			BSONObj geoObj = atomdata[columnName].Obj();
+			if (geoObj.isEmpty())
+				return false;
 			geom::Geometry *pGeometry = NULL;
-			int parseSt = MGP.DataType2Geometry(geoObj, pGeometry);
+			int parseSt = _MGP.DataType2Geometry(geoObj, pGeometry);
 			bool returnValue = false;
-			if (parseSt == 1)//parseSuccess
+			if (parseSt == 1) // parseSuccess
 			{
 				if (searchGeometry->contains(pGeometry))
 				{
@@ -601,38 +593,37 @@ namespace index_manager
 		}
 	}
 
-
-	bool MongoIndexManagerIO::Geo_Verify_Intersect(mongo::OID childOID, double ctx, double cty,double rMin,double rMax, bool Contidions, string DB_NAME, string STORAGE_NAME, string COLUMN_NAME,double &distance)
+	bool MongoIndexManagerIO::geoVerifyIntersect(mongo::OID childOID, double ctx, double cty, double rMin, double rMax, bool Contidions, string dbName, string storageName, string columnName, double &distance)
 	{
-		BSONObj atomdata = Basic_Fetch_AtomData(DB_NAME, STORAGE_NAME, childOID);
-		BSONObj geoObj = atomdata[COLUMN_NAME].Obj();
-		if (geoObj.isEmpty())return false;
+		BSONObj atomdata = basicFindNodeById(dbName, storageName, childOID);
+		BSONObj geoObj = atomdata[columnName].Obj();
+		if (geoObj.isEmpty())
+			return false;
 		GeometryFactory::Ptr factory;
 		CoordinateArraySequenceFactory csf;
 		geom::Point *pPoint = factory.get()->createPoint(Coordinate(ctx, cty, 0));
 		geom::Geometry *pGeometry = NULL;
-		int parseSt = MGP.DataType2Geometry(geoObj, pGeometry);
+		int parseSt = _MGP.DataType2Geometry(geoObj, pGeometry);
 		bool returnValue = false;
-		if (parseSt == 1)//parseSuccess
+		if (parseSt == 1) // parseSuccess
 		{
 			distance = pGeometry->distance(pPoint);
-			if (distance <= rMax&&distance >= rMin)
+			if (distance <= rMax && distance >= rMin)
 			{
 				returnValue = true;
 			}
-			
 		}
 		delete pPoint;
 		delete pGeometry;
 		return returnValue;
 	}
 
-	bool MongoIndexManagerIO::ParseGeometry(mongo::BSONObj Geometry2Parser, geos::geom::Geometry *&parsedGeometry)
+	bool MongoIndexManagerIO::parseGeometry(mongo::BSONObj Geometry2Parser, geos::geom::Geometry *&parsedGeometry)
 	{
 		try
 		{
-			int parseSt = MGP.DataType2Geometry(Geometry2Parser, parsedGeometry);
-			if (parseSt == 1)//parseSuccess
+			int parseSt = _MGP.DataType2Geometry(Geometry2Parser, parsedGeometry);
+			if (parseSt == 1) // parseSuccess
 				return true;
 			else
 				return false;
@@ -643,5 +634,5 @@ namespace index_manager
 			return false;
 		}
 	}
-    
+
 }

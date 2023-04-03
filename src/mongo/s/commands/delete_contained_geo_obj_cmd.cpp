@@ -82,9 +82,9 @@ public:
         std::string errmsg;
         int stat;
         try {
-            if (!pIndexManagerIO->IsConnected())
+            if (!pIndexManagerIO->isConnected())
                 pIndexManagerIO->connectMyself();
-            if (!pRTreeIO->IsConnected())
+            if (!pRTreeIO->isConnected())
                 pRTreeIO->connectMyself();
 
             string collection = cmdObj["collection"].str();
