@@ -121,7 +121,7 @@ namespace mongo
                 BSONObj index = cmdObj["indexes"].Array()[0].Obj()["key"].Obj();
                 // log() << "index:"<< index;
                 std::set<std::string> fields;
-                auto fieldNames = index.getFieldNames<std::set<std::string>>();
+                fields = index.getFieldNames<std::set<std::string>>();
                 // log() << "index:" << fields.size();
                 for (std::set<std::string>::iterator it = fields.begin(); it != fields.end(); ++it)
                 {

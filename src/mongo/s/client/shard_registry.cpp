@@ -594,8 +594,8 @@ void ShardRegistry::initConfigShardIfNecessary(const ConnectionString& configCS)
 }
 
 // Registers a new metadata entry in the meta_geom collection (config db)
-bool ShardRegistry::registerGeometry(OperationContext* opCtx,BSONObj bdr)
-{
+bool ShardRegistry::registerGeometry(OperationContext* opCtx, BSONObj bdr)
+{   
     // LOG COMMAND TO COUT
     std::cout << "\n registerGeometry: Inserting document into meta_geom: " << bdr.toString() << "\n";
 
@@ -611,6 +611,7 @@ bool ShardRegistry::registerGeometry(OperationContext* opCtx,BSONObj bdr)
     auto reply = conn->runCommand(request);
     auto status = getStatusFromCommandResult(reply->getCommandReply());
     std::cout << "\nThe status from running the command against config svr: " << status.toString() << "\n";
+    
     this->_currGeoMeta.datanamespace = bdr["datanamespace"].str();
     this->_currGeoMeta.column_name = bdr["column_name"].str();
     this->_currGeoMeta.gtype = bdr["gtype"].Int();

@@ -263,7 +263,7 @@ namespace index_manager
 	{
 
 		BSONObjBuilder condition;
-		condition.append("NAMESPACE", dbName + "." + storageName);
+		condition.append("datanamespace", dbName + "." + storageName);
 		BSONObjBuilder setBuilder;
 		BSONObjBuilder setConditionBuilder;
 		setConditionBuilder.append("index_info", Key2Modify);
@@ -289,7 +289,7 @@ namespace index_manager
 	bool MongoIndexManagerIO::basicGeoMetadataExists(OperationContext *opCtx, string dbName, string storageName)
 	{
 		BSONObjBuilder bdr;
-		bdr.append("NAMESPACE", dbName + "." + storageName);
+		bdr.append("datanamespace", dbName + "." + storageName);
 		;
 		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
 		uassertStatusOK(status.getStatus());
