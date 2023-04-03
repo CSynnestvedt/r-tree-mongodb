@@ -379,6 +379,7 @@ namespace mongo
                     vector<BSONElement> vv;
                     coords.elems(vv);
                     return RTreeNearClusterClientCursorImpl::make(opCtx,
+                                                                  Grid::get(opCtx)->getExecutorPool()->getArbitraryExecutor(),
                                                                   dbname,
                                                                   collName,
                                                                   vv[0].Number(),

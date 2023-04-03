@@ -63,6 +63,7 @@ namespace mongo
      * Overloaded version of make function
      */
     ClusterClientCursorGuard RTreeNearClusterClientCursorImpl::make(OperationContext *opCtx,
+                                                                    std::shared_ptr<executor::TaskExecutor> executor,
                                                                     std::string dbName,
                                                                     std::string collectionName,
                                                                     double ctx,
@@ -72,7 +73,7 @@ namespace mongo
                                                                     ClusterClientCursorParams &&params)
     {
         std::unique_ptr<ClusterClientCursor> cursor(
-            new RTreeNearClusterClientCursorImpl(opCtx, dbName, collectionName, ctx, cty, rMin, rMax, std::move(params)));
+            new RTreeNearClusterClientCursorImpl(opCtx, std::move(executor), dbName, collectionName, ctx, cty, rMin, rMax, std::move(params)));
         return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
@@ -111,13 +112,14 @@ namespace mongo
     }
 
     RTreeNearClusterClientCursorImpl::RTreeNearClusterClientCursorImpl(OperationContext *txn,
+                                                                       std::shared_ptr<executor::TaskExecutor> executor,
                                                                        std::string DB_NAME,
                                                                        std::string COLLECTION_NAME,
                                                                        double ctx,
                                                                        double cty,
                                                                        double rMin,
                                                                        double rMax,
-                                                                       ClusterClientCursorParams &&params) : _params(std::move(params))
+                                                                       ClusterClientCursorParams &&params) : _params(std::move(params)), _root(buildMergerPlan(txn, std::move(executor), &_params)), _opCtx(txn)
     {
         _rtreeGeoNearCursor = IM.GeoSearchNear(txn, DB_NAME, COLLECTION_NAME, ctx, cty, rMin, rMax);
         _isRtreeCursorOK = true;
@@ -125,7 +127,6 @@ namespace mongo
 
     RTreeNearClusterClientCursorImpl::~RTreeNearClusterClientCursorImpl()
     {
-        
     }
 
     StatusWith<ClusterQueryResult> RTreeNearClusterClientCursorImpl::next()

@@ -69,6 +69,7 @@ namespace mongo
                                              ClusterClientCursorParams &&params);
 
         static ClusterClientCursorGuard make(OperationContext *opCtx,
+                                             std::shared_ptr<executor::TaskExecutor> executor,
                                              std::string dbName,
                                              std::string collectionName,
                                              double ctx,
@@ -152,6 +153,7 @@ namespace mongo
                                          boost::optional<LogicalSessionId> lsid);
 
         RTreeNearClusterClientCursorImpl(OperationContext *txn,
+                                         std::shared_ptr<executor::TaskExecutor> executor,
                                          std::string DB_NAME,
                                          std::string COLLECTION_NAME,
                                          double ctx,
