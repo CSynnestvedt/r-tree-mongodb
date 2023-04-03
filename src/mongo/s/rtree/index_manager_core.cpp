@@ -515,9 +515,9 @@ namespace index_manager
 				if (_IO->rtreeSetDataMBR(AtomData, cn, m))
 				{
 					//store Data 1st because data is more important
-					mongo::OID dataKeyAI;
+					mongo::OID dataKeyAI = AtomData["_id"].OID();
 					// log() << "Data2Insert:"<<AtomData << endl;
-					_IO->basicInsertOneNode(opCtx,dbName, collectionName, AtomData, dataKeyAI, result);
+					// _IO->basicInsertOneNode(opCtx,dbName, collectionName, AtomData, dataKeyAI, result);
 					Branch b;
 					b.ChildKey = dataKeyAI;
 					b.HasData = true;

@@ -36,6 +36,7 @@
 #include "mongo/db/curop.h"
 #include "mongo/db/fle_crud.h"
 #include "mongo/db/internal_transactions_feature_flag_gen.h"
+#include "mongo/db/ops/write_ops.h"
 #include "mongo/db/pipeline/lite_parsed_pipeline.h"
 #include "mongo/db/stats/counters.h"
 #include "mongo/db/storage/duplicate_key_error_info.h"
@@ -55,7 +56,9 @@
 #include "mongo/s/transaction_router_resource_yielder.h"
 #include "mongo/s/would_change_owning_shard_exception.h"
 #include "mongo/s/write_ops/batched_command_response.h"
+#include "mongo/s/rtree/rtree_globle.h"
 #include "mongo/util/timer.h"
+
 
 #define MONGO_LOGV2_DEFAULT_COMPONENT ::mongo::logv2::LogComponent::kSharding
 
@@ -632,6 +635,27 @@ bool ClusterWriteCmd::InvocationBase::runImpl(OperationContext* opCtx,
         if (!writeCmdStatus.isOK()) {
             txnRouter.implicitlyAbortTransaction(opCtx, writeCmdStatus);
         }
+    }
+    // {_id: 1, geometry: {type: "Point", coordinates: [1.0, 2.0 ]}}
+    auto insertStatus = getStatusFromCommandResult(response.toBSON());
+    if (!pIndexManagerIO->isConnected()) {
+        pIndexManagerIO->connectMyself();
+    }
+    if (!pRTreeIO->isConnected())
+        pRTreeIO->connectMyself();
+
+    //         Grid::get(opCtx)->shardRegistry()->rtreeExists(opCtx, request.toBSON({})); TODO: IMPLEMENT CHECK HERE!!!
+    if (insertStatus.isOK() && _batchedRequest.getBatchType() == BatchedCommandRequest::BatchType_Insert) {
+        BSONObjBuilder customResult;
+        write_ops::InsertCommandRequest request = batchedRequest.getInsertRequest();
+        std::vector<mongo::BSONElement> documents = request.toBSON({})["documents"].Array();
+        auto collectionName = request.toBSON({})["insert"].toString();
+        for(std::vector<mongo::BSONElement>::iterator it = documents.begin(); it != documents.end(); ++it) {
+            BSONElement& el = *it;
+            std::cout << "\nPrinting each document: " << el.toString();
+            IM.InsertIndexedDoc(opCtx, request.getDbName().db(), collectionName, el.Obj(), customResult);
+        }
+        std::cout << "\nThis is the insert request: " << request.toBSON({}).toString() << "\n";
     }
 
     result.appendElements(response.toBSON());
