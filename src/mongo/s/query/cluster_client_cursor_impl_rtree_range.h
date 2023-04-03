@@ -72,6 +72,7 @@ namespace mongo
          * Overrided make function for R Tree
          */
         static ClusterClientCursorGuard make(OperationContext *opCtx,
+                                             std::shared_ptr<executor::TaskExecutor> executor,
                                              std::string dbName,
                                              std::string collectionName,
                                              mongo::BSONObj InputGeometry,
@@ -152,7 +153,9 @@ namespace mongo
                                           ClusterClientCursorParams &&params,
                                           boost::optional<LogicalSessionId> lsid);
 
-        RTreeRangeClusterClientCursorImpl(OperationContext *opCtx, std::string dbName,
+        RTreeRangeClusterClientCursorImpl(OperationContext *opCtx,
+                                          std::shared_ptr<executor::TaskExecutor> executor,
+                                          std::string dbName,
                                           std::string collectionName,
                                           mongo::BSONObj InputGeometry,
                                           int queryType,

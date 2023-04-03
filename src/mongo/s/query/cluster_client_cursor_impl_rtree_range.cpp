@@ -64,6 +64,7 @@ namespace mongo
      * Overload make function
      */
     ClusterClientCursorGuard RTreeRangeClusterClientCursorImpl::make(OperationContext *opCtx,
+                                                                     std::shared_ptr<executor::TaskExecutor> executor,
                                                                      std::string dbName,
                                                                      std::string collectionName,
                                                                      mongo::BSONObj InputGeometry,
@@ -71,7 +72,7 @@ namespace mongo
                                                                      ClusterClientCursorParams &&params)
     {
         std::unique_ptr<ClusterClientCursor> cursor(
-            new RTreeRangeClusterClientCursorImpl(opCtx, dbName, collectionName, InputGeometry, queryType, std::move(params)));
+            new RTreeRangeClusterClientCursorImpl(opCtx, std::move(executor), dbName, collectionName, InputGeometry, queryType, std::move(params)));
         return ClusterClientCursorGuard(opCtx, std::move(cursor));
     }
 
@@ -113,11 +114,12 @@ namespace mongo
      * Overload constructor
      */
     RTreeRangeClusterClientCursorImpl::RTreeRangeClusterClientCursorImpl(OperationContext *opCtx,
+                                                                         std::shared_ptr<executor::TaskExecutor> executor,
                                                                          std::string dbName,
                                                                          std::string collectionName,
                                                                          mongo::BSONObj InputGeometry,
                                                                          int queryType,
-                                                                         ClusterClientCursorParams &&params) : _params(std::move(params))
+                                                                         ClusterClientCursorParams &&params) : _params(std::move(params)), _root(buildMergerPlan(opCtx, std::move(executor), &_params)), _opCtx(opCtx)
     {
         if (queryType == 0) //$geoIntersects
         {
