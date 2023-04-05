@@ -223,7 +223,7 @@ namespace rtree_index
 	    BSONObjBuilder & bdrRef=bdr;
 		BSONObj insertObj=Nodebdr.obj();
 		LOGV2(40000, "starting to insert data into collection!");
-		ok = RunWriteCommand(txn,_dbName, "rtree_" + _Data_CollectionName,insertObj, INSERT,bdrRef);
+		ok = RunWriteCommand(txn,_dbName, "rtree_" + _Data_CollectionName,insertObj, INSERT, bdrRef);
         
 		return 1;
 	}

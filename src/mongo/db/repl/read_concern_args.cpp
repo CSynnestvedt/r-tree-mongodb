@@ -132,6 +132,7 @@ boost::optional<LogicalTime> ReadConcernArgs::getArgsAtClusterTime() const {
 }
 
 Status ReadConcernArgs::initialize(const BSONElement& readConcernElem) {
+
     invariant(isEmpty());  // only legal to call on uninitialized object.
     _specified = false;
     if (readConcernElem.eoo()) {

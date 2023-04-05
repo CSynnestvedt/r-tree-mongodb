@@ -1,30 +1,32 @@
 /**
-*    Copyright (C) 2015 LIESMARS, Wuhan University.
-*    Financially supported by Wuda Geoinfamatics Co. ,Ltd.
-*    Author:  Xiang Longgang, Wang Dehao , Shao Xiaotian
-*
-*    This program is free software: you can redistribute it and/or  modify
-*    it under the terms of the GNU Affero General Public License, version 3,
-*    as published by the Free Software Foundation.
-*
-*    This program is distributed in the hope that it will be useful,
-*    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*    GNU Affero General Public License for more details.
-*
-*    You should have received a copy of the GNU Affero General Public License
-*    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ *    Copyright (C) 2015 LIESMARS, Wuhan University.
+ *    Financially supported by Wuda Geoinfamatics Co. ,Ltd.
+ *    Author:  Xiang Longgang, Wang Dehao , Shao Xiaotian
+ *
+ *    This program is free software: you can redistribute it and/or  modify
+ *    it under the terms of the GNU Affero General Public License, version 3,
+ *    as published by the Free Software Foundation.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Affero General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Affero General Public License
+ *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #pragma once
 
+#include "mongo/client/connpool.h"
 #include "mongo/db/operation_context.h"
-#include "mongo/db/dbdirectclient.h"
+#include "mongo/s/cluster_commands_helpers.h"
+#include "mongo/s/collection_routing_info_targeter.h"
+#include "mongo/s/grid.h"
 
-
-//Originally, this function is contained in rtree_io.h, However, there always appears some link errors that several functions in rtree_io.h are redefined.
-//The reason is that both transaction.cpp and commands_public.cpp reference rtree_io.h, consequently, transaction.obj and commands_public.obj both contain aforementioned functions.
-//In view that Transaction.cpp solely use one function RunWriteCommand, I just extract it out of RTreeIO.h.
+// Originally, this function is contained in rtree_io.h, However, there always appears some link errors that several functions in rtree_io.h are redefined.
+// The reason is that both transaction.cpp and commands_public.cpp reference rtree_io.h, consequently, transaction.obj and commands_public.obj both contain aforementioned functions.
+// In view that Transaction.cpp solely use one function RunWriteCommand, I just extract it out of RTreeIO.h.
 
 using namespace mongo;
 using namespace std;
@@ -38,29 +40,27 @@ namespace rtree_index
 		REMOVE = 2,
 		DROP = 3
 	};
-	static bool RunWriteCommand(OperationContext* txn,string dbname, string collname, BSONObj cmdObj, writeOpt opt, BSONObjBuilder& result)
+	static bool RunWriteCommand(OperationContext *opCtx, string dbName, string collname, BSONObj cmdObj, writeOpt opt, BSONObjBuilder &result)
 	{
-		bool ok = false;
-		auto nss = NamespaceString(dbname + "." + collname);
-		DBDirectClient dbClient(txn);
-		
+
+		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
+		uassertStatusOK(status.getStatus());
+		auto nss = NamespaceString(dbName, collname);
+		// auto targeter = CollectionRoutingInfoTargeter(opCtx, nss);
+		// auto routingInfo = targeter.getRoutingInfo();
+
+		BSONObj cmdToBeSent;
 		if (opt == INSERT)
 		{
+
 			BSONObjBuilder insertObj;
 			insertObj.append("insert", collname);
 			BSONArrayBuilder docArr;
 			docArr.append(cmdObj);
 			insertObj.append("documents", docArr.arr());
 			insertObj.append("ordered", true);
-
-			auto request = OpMsgRequest::fromDBAndBody(nss.db(), insertObj.obj());
-
-			rpc::UniqueReply reply = dbClient.runCommand(std::move(request));
-			auto insertStatus = getStatusFromWriteCommandReply(reply->getCommandReply());
-			/*insert*/
-			// ok = c->run(txn,dbname, objRef, 0, errmsg, result);
-			
-			return insertStatus.isOK();
+			cmdToBeSent = insertObj.obj();
+			cmdToBeSent = CommandHelpers::appendMajorityWriteConcern(cmdToBeSent);
 		}
 		else if (opt == UPDATE)
 		{
@@ -77,14 +77,9 @@ namespace rtree_index
 			docArr.append(update.obj());
 			updateObj.append("updates", docArr.arr());
 			updateObj.append("ordered", true);
-
-			auto request = OpMsgRequest::fromDBAndBody(nss.db(), updateObj.obj());
-			rpc::UniqueReply reply = dbClient.runCommand(std::move(request));
-			auto insertStatus = getStatusFromCommandResult(reply->getCommandReply());
-
-			return insertStatus.isOK();
+			cmdToBeSent = updateObj.obj();
 		}
-		else if (opt==REMOVE)
+		else if (opt == REMOVE)
 		{
 			BSONObjBuilder deleteObj;
 			deleteObj.append("delete", collname);
@@ -95,25 +90,76 @@ namespace rtree_index
 			docArr.append(deletedoc.obj());
 			deleteObj.append("deletes", docArr.arr());
 			deleteObj.append("ordered", true);
-			
-			auto request = OpMsgRequest::fromDBAndBody(nss.db(), deleteObj.obj());
-			rpc::UniqueReply reply = dbClient.runCommand(std::move(request));
-			auto insertStatus = getStatusFromCommandResult(reply->getCommandReply());
-			return insertStatus.isOK();
+			cmdToBeSent = deleteObj.obj();
 		}
 		else if (opt == DROP)
 		{
 			// bool ok;
-			string s="";
-			string  & errmsg=s;
+			string s = "";
+			string &errmsg = s;
 			BSONObjBuilder dropcmd;
 			dropcmd.append("drop", collname);
-
-			auto request = OpMsgRequest::fromDBAndBody(nss.db(), dropcmd.obj());
-			rpc::UniqueReply reply = dbClient.runCommand(std::move(request));
-			auto insertStatus = getStatusFromCommandResult(reply->getCommandReply());
-			return insertStatus.isOK();
+			cmdToBeSent = dropcmd.obj();
 		}
-		return ok;
+
+		std::cout << "The command to be sent: " << cmdToBeSent.toString() << "\n";
+
+		// Force a refresh of the cached database metadata from the config server.
+		// const auto swDbMetadata =
+		//	Grid::get(opCtx)->catalogCache()->getDatabaseWithRefresh(opCtx, dbName);
+		std::cout << "Step -1\n";
+		// Next line causes SegFault, figure out why
+		auto hostAndPort = repl::ReplicationCoordinator::get(opCtx)->getCurrentPrimaryHostAndPort();
+		std::cout << "Step 0 \n";
+		if (hostAndPort.empty())
+		{
+			uasserted(ErrorCodes::PrimarySteppedDown, "No primary exists currently");
+		}
+		std::cout << "Step 1 \n";
+		auto conn = std::make_unique<ScopedDbConnection>(hostAndPort.toString());
+
+		if (auth::isInternalAuthSet())
+		{
+			uassertStatusOK(conn->get()->authenticateInternalUser());
+		}
+		std::cout << "Step 2 \n";
+		DBClientBase *client = conn->get();
+		ScopeGuard guard([&]
+						 { conn->done(); });
+		std::cout << "Step 2 and 1/2 \n";
+		try
+		{
+			BSONObj resObj;
+			std::cout << "Step 3 \n";
+			if (!client->runCommand(DatabaseName(dbName), cmdToBeSent, resObj))
+			{
+				uassertStatusOK(getStatusFromCommandResult(resObj));
+			}
+			std::cout << "Step 4 \n";
+			return getStatusFromCommandResult(resObj).isOK();
+		}
+		catch (...)
+		{
+			guard.dismiss();
+			conn->kill();
+			throw;
+		}
+
+		// auto shardResponses = scatterGatherVersionedTargetByRoutingTable(
+		// 	opCtx,
+		// 	nss.db(),
+		// 	targeter.getNS(),
+		// 	routingInfo,
+		// 	cmdToBeSent,
+		// 	ReadPreferenceSetting(ReadPreference::PrimaryOnly),
+		// 	Shard::RetryPolicy::kNoRetry,
+		// 	BSONObj() /* query */,
+		// 	BSONObj() /* collation */);
+
+		// std::string errmsg;
+		// BSONObjBuilder output;
+		// const bool ok =
+		// 	appendRawResponses(opCtx, &errmsg, &output, std::move(shardResponses)).responseOK;
+		// std::cout << "The output: " << output.obj().toString() << "\n";
 	}
 }
