@@ -252,14 +252,10 @@ namespace mongo
                     // responses from the shard(s).
                     bool partialResultsReturned = false;
                     std::vector<BSONObj> batch;
-
                     CursorId cursorId;
-
-                    BSONElement filterCommand = _request.body["filter"].Obj().firstElement();
-
-                    if ("geoWithin" == std::string(filterCommand.fieldName()) || "geoIntersects" == std::string(filterCommand.fieldName()) || "near" == std::string(filterCommand.fieldName()))
+                    if (_request.body.hasField("filter") && _request.body["filter"].isABSONObj() && ("geoWithin" == std::string(_request.body["filter"].Obj().firstElement().fieldName()) || "geoIntersects" == std::string(_request.body["filter"].Obj().firstElement()) || "near" == std::string(_request.body["filter"].Obj().firstElement())))
                     {
-
+                        BSONElement filterCommand = _request.body["filter"].Obj().firstElement();
                         std::cout << "\nCalling the correct run query function \n";
                         cursorId = ClusterFind::runQuery(opCtx, ns(), _request.body, *cq, ReadPreferenceSetting::get(opCtx), &batch, &partialResultsReturned);
                     }

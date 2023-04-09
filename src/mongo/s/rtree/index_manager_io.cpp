@@ -37,7 +37,7 @@ namespace index_manager
 {
 	stdx::mutex _INDEXMANAGERIO_mu;
 
-	MongoIndexManagerIO::MongoIndexManagerIO(DBClientBase *USER_CONN)
+	MongoIndexManagerIO::MongoIndexManagerIO(DBClientConnection *USER_CONN)
 	{
 		_conn = 0;
 		//_conn = USER_CONN;
@@ -47,19 +47,14 @@ namespace index_manager
 	{
 		std::string errmsg;
 		string url = "localhost:" + boost::lexical_cast<string>(serverGlobalParams.port);
-		ConnectionString cs = ConnectionString::parse(url).getValue();
-		// ConnectionString cs(ConnectionString::parse(connectionString));
-		if (!cs.isValid())
+		HostAndPort hp = HostAndPort(url);
+		_conn = new DBClientConnection();
+		auto status = _conn->connect(hp,
+									 StringData(),
+									 boost::none);
+		if (!status.isOK())
 		{
-			cout << "error parsing url: " << errmsg << endl;
-			return false;
-		}
-		// std::string logMessage = "see what the connection string is: " + std::to_string(cs) + "\n"
-		// LOGV2(40001, logMessage);
-		_conn = cs.connect(errmsg).getValue().get();
-		if (!_conn)
-		{
-			cout << "couldn't connect: " << errmsg << endl;
+			std::cout << "Could not connect " << status.toString() << endl;
 			return false;
 		}
 
@@ -68,10 +63,13 @@ namespace index_manager
 
 	bool MongoIndexManagerIO::isConnected()
 	{
-		if (_conn != 0 && this->_conn->isStillConnected())
+		if (_conn != 0)
+		{
+			_conn->checkConnection();
+			std::cout << "We made it here \n";
 			return true;
-		else
-			return false;
+		}
+		return false;
 	}
 
 	mongo::OID MongoIndexManagerIO::Basic_Generate_Key()
@@ -290,7 +288,6 @@ namespace index_manager
 	{
 		BSONObjBuilder bdr;
 		bdr.append("datanamespace", dbName + "." + storageName);
-		;
 		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
 		uassertStatusOK(status.getStatus());
 
@@ -478,6 +475,7 @@ namespace index_manager
 	void MongoIndexManagerIO::basicInitStorageTraverse(OperationContext *opCtx, string dbName, string storageName)
 	{
 		_currentStorage = storageName;
+
 		/*query*/
 		{
 			stdx::lock_guard<stdx::mutex> CONN_lock(_INDEXMANAGERIO_mu);
@@ -485,11 +483,11 @@ namespace index_manager
 			{
 				connectMyself();
 			}
-			FindCommandRequest request(NamespaceStringOrUUID{NamespaceString(dbName + "." + _currentStorage)});
+			FindCommandRequest request(NamespaceString(dbName, _currentStorage));
 			request.setReadConcern(
 				repl::ReadConcernArgs(repl::ReadConcernLevel::kMajorityReadConcern)
 					.toBSONInner());
-
+			// ERROR HERE
 			_currentCursor = _conn->find(request);
 		}
 		BSONObjBuilder bdr;
@@ -499,9 +497,12 @@ namespace index_manager
 		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
 		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
 		uassertStatusOK(status.getStatus());
+		std::cout << "Not segfaulting yet version 3333\n";
 		auto conf = Grid::get(opCtx)->shardRegistry();
+		std::cout << "Not segfaulting yet version 3333\n";
 		BSONObj oneGeoMetaData = conf->getGeometry(opCtx, bdr.obj());
 		_columnName = oneGeoMetaData["column_name"].String();
+		std::cout << "Never segfaulted in basicInitStorageTraverse! :D\n";
 	}
 
 	/*
@@ -524,10 +525,6 @@ namespace index_manager
 				return 1;
 			}
 			return -1;
-		}
-		else
-		{
-			return 0;
 		}
 		return 0;
 	}

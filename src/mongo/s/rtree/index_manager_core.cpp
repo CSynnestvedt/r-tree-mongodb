@@ -18,6 +18,9 @@
 
 #include "index_manager_core.h"
 #include "mongo/db/operation_context.h"
+#include "mongo/s/commands/shard_collection_gen.h"
+
+
 #include <iostream>
 using namespace std;
 namespace index_manager
@@ -83,9 +86,59 @@ namespace index_manager
 
 	int IndexManagerBase::PrepareIndex(OperationContext* opCtx,string dbName, string collectionName, string columnName, int indexType, int maxNode, int maxLeaf)
 	{
+		// Creating Rtree spatial collection
+		BSONObjBuilder bob;
+		bob.append("create", "rtree_" + collectionName);
+		BSONObj cmdToSend = bob.obj();
+		cmdToSend = CommandHelpers::appendMajorityWriteConcern(cmdToSend);
+		auto dbStatus = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName).getValue();
+		ShardId shardId = dbStatus->getPrimary();
+		appendDbVersionIfPresent(cmdToSend, dbStatus);
+		appendShardVersion(cmdToSend, ShardVersion::UNSHARDED());
+
+		std::vector<AsyncRequestsSender::Request> requests;
+        requests.emplace_back(std::move(shardId), cmdToSend);
 		// std::cout<<"NS in Operation context: (PrepareIndex)"<<opCtx->getNS()<<endl;
-		
-		//log() << "position0" << endl;
+
+		std::cout << "Creating collection " << dbName << ".rtree_" << collectionName << "\n"; 
+		auto responses =
+        gatherResponses(opCtx,
+                        dbName,
+                        ReadPreferenceSetting(ReadPreference::PrimaryOnly),
+        				Shard::RetryPolicy::kIdempotent,
+                        requests);
+		auto status = responses.front().swResponse.getStatus();
+		std::cout << "Status from rtree collection: " << status.toString() << "\n";
+		std::cout << "The data from swResponse rtree: " << responses.front().swResponse.getValue().data.toString() << "\n";
+		auto catalogCache = Grid::get(opCtx)->catalogCache();
+    	catalogCache->invalidateShardOrEntireCollectionEntryForShardedCollection(
+        NamespaceString(dbName, "rtree_" + collectionName), boost::none, shardId);
+
+		// Creating system.buckets.rtree_SC collection
+		BSONObjBuilder bobBucket;
+		bobBucket.append("create", "system.buckets.rtree_" + collectionName);
+		BSONObj cmdToSendBucket = bobBucket.obj();
+		dbStatus = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName).getValue();
+		shardId = dbStatus->getPrimary();
+		cmdToSendBucket = CommandHelpers::appendMajorityWriteConcern(cmdToSendBucket);
+		appendDbVersionIfPresent(cmdToSendBucket, dbStatus);
+		appendShardVersion(cmdToSendBucket, ShardVersion::UNSHARDED());
+
+		std::vector<AsyncRequestsSender::Request> requestsBucket;
+        requestsBucket.emplace_back(std::move(shardId), cmdToSendBucket);
+
+		std::cout << "Creating collection " << dbName << "system.buckets.rtree_" << collectionName << "\n"; 
+		auto responsesBucket =
+        gatherResponses(opCtx,
+                        dbName,
+                        ReadPreferenceSetting(ReadPreference::PrimaryOnly),
+        				Shard::RetryPolicy::kIdempotent,
+                        requestsBucket);
+		catalogCache->invalidateShardOrEntireCollectionEntryForShardedCollection(
+        NamespaceString(dbName, "system.buckets.rtree_" + collectionName), boost::none, shardId);
+		auto bucketStatus = responsesBucket.front().swResponse.getStatus();
+		std::cout << "Status from bucket collection: " << bucketStatus.toString() << "\n";
+
 		if (indexType <= 0 || indexType > 2)
 		{
 			return -1;
@@ -102,7 +155,9 @@ namespace index_manager
 			}
 			if (indexType == 1)
 			{
-				Transaction* t = new CreateIndexTransaction(opCtx,dbName);
+
+				std::cout << "Inside IndexManager PrepareIndex with db: " << dbName << "\n";
+ 				Transaction* t = new CreateIndexTransaction(opCtx,dbName);
 				mongo::OID tempkey;
 				_IO->rtreeInsertIndexMetaData(t,collectionName, maxNode, maxLeaf, tempkey);
 				mongo::OID nullKey;
@@ -112,13 +167,15 @@ namespace index_manager
 				_Rtree.InsertRoot(opCtx,Root);
 				t->InsertDone(3,"rtree_"+collectionName,rtree_index::INSERT,"InsertRoot");
 
+				std::cout << "\nWe made it past the insert root stage before segfaulting like a boss\n";
 				_IO->basicInitStorageTraverse(opCtx,dbName,collectionName);
 				t->UpdateDone(4,"rtree_"+collectionName,rtree_index::UPDATE,"begin building Rtree index on existing data");
+				std::cout << "\nWe made it past the init storage traverse and update done\n";
 				mongo::OID oneKey;
 				MBR oneMBR;
 				int count = 0;
 
-				while (_IO->basicStorageTraverseNext(oneMBR,oneKey))
+				while (_IO->basicStorageTraverseNext(oneMBR, oneKey))
 				{
 					Branch b;
 					b.ChildKey=oneKey;
@@ -126,14 +183,17 @@ namespace index_manager
 					b.mbr = oneMBR;
 					_Rtree.Insert(opCtx,Root, b, 0);
 					if (count%100==0)
-					cout << count << "  "<< Root<<"\r";
+					std::cout << count << "  "<< Root<<"\r";
 					count++;
 				}
+				std::cout << "\nWe made it past the storage traversal loop\n";
 				t->UpdateDone(5,"rtree_"+collectionName,rtree_index::UPDATE,"finish building Rtree index on existing data");
 				
 				_IO->rteeModifyRootKey(opCtx,dbName,collectionName, Root);
+				std::cout << "\nWe made it past last rtreeModifyRootKey\n";
 				t->UpdateDone(6, "config.meta_geom", rtree_index::UPDATE, "Update Root Key in meta_geom");
 				delete t;
+				std::cout << "\nWe made it all the way to the end\n";
 				return 1;
 			}
 			else

@@ -213,7 +213,7 @@ namespace rtree_index
 			arr.append(data.Branchs[i].mbr.MaxY);
 			bb.append("MBR", arr.arr());
 			bb.append("ChildID", data.Branchs[i].ChildKey);
-			arrbuilder.append(bb.obj());//��ʵbb����һ��branch
+			arrbuilder.append(bb.obj());
 		}
 		Nodebdr.append("Branchs", arrbuilder.arr());
         
@@ -225,7 +225,7 @@ namespace rtree_index
 		LOGV2(40000, "starting to insert data into collection!");
 		ok = RunWriteCommand(txn,_dbName, "rtree_" + _Data_CollectionName,insertObj, INSERT, bdrRef);
         
-		return 1;
+		return ok;
 	}
 
 	bool rtree_index::MongoIO::RTree_ModifyBranch(OperationContext* txn,mongo::OID targetOID, Branch branch2modify, int i)

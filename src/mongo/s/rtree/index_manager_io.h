@@ -24,6 +24,7 @@
 #include "mongo_geometry_parser.h"
 // #include "GeoRef.h"
 #include <boost/scoped_ptr.hpp>
+#include "mongo/client/dbclient_connection.h"
 // #include "mongo/s/catalog/type_database.h"
 #include "mongo/s/rtree/transaction.h"
 
@@ -60,7 +61,7 @@ namespace index_manager
 	class MongoIndexManagerIO
 	{
 	public:
-		MongoIndexManagerIO(DBClientBase *userConnection);
+		MongoIndexManagerIO(DBClientConnection *userConnection);
 		mongo::OID Basic_Generate_Key();
 		mongo::BSONObj basicFindNodeById(string dbName, string storageName, mongo::OID dataToFetch);
 		bool basicInsertOneNode(OperationContext *opCtx, string dbName, string storageName, mongo::BSONObj atomData, mongo::OID &atomKey, BSONObjBuilder &result);
@@ -93,7 +94,7 @@ namespace index_manager
 	private:
 		MongoGeometryParser _MGP;
 		string _connectionString; // place here rather in IndexManagerBase to be IO detached
-		DBClientBase *_conn;
+		DBClientConnection *_conn;
 		string _currentStorage;
 		std::unique_ptr<DBClientCursor> _currentCursor;
 		string _columnName; // used to accelerate the process if necessary

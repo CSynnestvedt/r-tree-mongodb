@@ -237,6 +237,7 @@ namespace mongo
 
                 rtreepara.append("columnName", columnname);
                 rtreepara.append("indextype", 1);
+                std::cout << "The cmdObj delivered to createIndexesCmd: " << cmdObj.toString() << "\n";
                 BSONObj indexes = cmdObj["indexes"].Array()[0].Obj()["key"].Obj();
                 indexes.hasField("maxnode") ? rtreepara.append("maxnode", indexes["maxnode"].Double()) : rtreepara.append("maxnode", 32.0);
                 indexes.hasField("maxleaf") ? rtreepara.append("maxleaf", indexes["maxleaf"].Double()) : rtreepara.append("maxleaf", 32.0);

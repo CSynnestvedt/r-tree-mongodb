@@ -20,9 +20,15 @@
 
 #include "mongo/client/connpool.h"
 #include "mongo/db/operation_context.h"
+#include "mongo/db/request_execution_context.h"
+#include "mongo/rpc/factory.h"
+#include "mongo/s/chunk_manager.h"
 #include "mongo/s/cluster_commands_helpers.h"
+#include "mongo/s/cluster_ddl.h"
 #include "mongo/s/collection_routing_info_targeter.h"
 #include "mongo/s/grid.h"
+#include "mongo/s/commands/strategy.h"
+
 
 // Originally, this function is contained in rtree_io.h, However, there always appears some link errors that several functions in rtree_io.h are redefined.
 // The reason is that both transaction.cpp and commands_public.cpp reference rtree_io.h, consequently, transaction.obj and commands_public.obj both contain aforementioned functions.
@@ -42,17 +48,11 @@ namespace rtree_index
 	};
 	static bool RunWriteCommand(OperationContext *opCtx, string dbName, string collname, BSONObj cmdObj, writeOpt opt, BSONObjBuilder &result)
 	{
-
-		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
-		uassertStatusOK(status.getStatus());
 		auto nss = NamespaceString(dbName, collname);
-		// auto targeter = CollectionRoutingInfoTargeter(opCtx, nss);
-		// auto routingInfo = targeter.getRoutingInfo();
 
 		BSONObj cmdToBeSent;
 		if (opt == INSERT)
 		{
-
 			BSONObjBuilder insertObj;
 			insertObj.append("insert", collname);
 			BSONArrayBuilder docArr;
@@ -60,7 +60,6 @@ namespace rtree_index
 			insertObj.append("documents", docArr.arr());
 			insertObj.append("ordered", true);
 			cmdToBeSent = insertObj.obj();
-			cmdToBeSent = CommandHelpers::appendMajorityWriteConcern(cmdToBeSent);
 		}
 		else if (opt == UPDATE)
 		{
@@ -102,64 +101,25 @@ namespace rtree_index
 			cmdToBeSent = dropcmd.obj();
 		}
 
-		std::cout << "The command to be sent: " << cmdToBeSent.toString() << "\n";
+		auto dbStatus = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName).getValue();
+		ShardId shardId = dbStatus->getPrimary();
 
-		// Force a refresh of the cached database metadata from the config server.
-		// const auto swDbMetadata =
-		//	Grid::get(opCtx)->catalogCache()->getDatabaseWithRefresh(opCtx, dbName);
-		std::cout << "Step -1\n";
-		// Next line causes SegFault, figure out why
-		auto hostAndPort = repl::ReplicationCoordinator::get(opCtx)->getCurrentPrimaryHostAndPort();
-		std::cout << "Step 0 \n";
-		if (hostAndPort.empty())
-		{
-			uasserted(ErrorCodes::PrimarySteppedDown, "No primary exists currently");
-		}
-		std::cout << "Step 1 \n";
-		auto conn = std::make_unique<ScopedDbConnection>(hostAndPort.toString());
+		cmdToBeSent = CommandHelpers::appendMajorityWriteConcern(cmdToBeSent);
+		cmdToBeSent = appendDbVersionIfPresent(cmdToBeSent, dbStatus);
+		cmdToBeSent = appendShardVersion(cmdToBeSent, ShardVersion::UNSHARDED());
 
-		if (auth::isInternalAuthSet())
-		{
-			uassertStatusOK(conn->get()->authenticateInternalUser());
-		}
-		std::cout << "Step 2 \n";
-		DBClientBase *client = conn->get();
-		ScopeGuard guard([&]
-						 { conn->done(); });
-		std::cout << "Step 2 and 1/2 \n";
-		try
-		{
-			BSONObj resObj;
-			std::cout << "Step 3 \n";
-			if (!client->runCommand(DatabaseName(dbName), cmdToBeSent, resObj))
-			{
-				uassertStatusOK(getStatusFromCommandResult(resObj));
-			}
-			std::cout << "Step 4 \n";
-			return getStatusFromCommandResult(resObj).isOK();
-		}
-		catch (...)
-		{
-			guard.dismiss();
-			conn->kill();
-			throw;
-		}
+		std::vector<AsyncRequestsSender::Request> requests;
+		requests.emplace_back(std::move(shardId), cmdToBeSent);
 
-		// auto shardResponses = scatterGatherVersionedTargetByRoutingTable(
-		// 	opCtx,
-		// 	nss.db(),
-		// 	targeter.getNS(),
-		// 	routingInfo,
-		// 	cmdToBeSent,
-		// 	ReadPreferenceSetting(ReadPreference::PrimaryOnly),
-		// 	Shard::RetryPolicy::kNoRetry,
-		// 	BSONObj() /* query */,
-		// 	BSONObj() /* collation */);
 
-		// std::string errmsg;
-		// BSONObjBuilder output;
-		// const bool ok =
-		// 	appendRawResponses(opCtx, &errmsg, &output, std::move(shardResponses)).responseOK;
-		// std::cout << "The output: " << output.obj().toString() << "\n";
+		auto responses =
+        gatherResponses(opCtx,
+                        dbName,
+                        ReadPreferenceSetting(ReadPreference::PrimaryOnly),
+        				Shard::RetryPolicy::kIdempotent,
+                        requests);
+		auto status = responses.front().swResponse.getStatus();
+		std::cout << "Status write op in write_op.h: " << status.toString() << "\n";
+		return status.isOK();
 	}
 }
