@@ -31,7 +31,7 @@ namespace rtree_index
 	
 	
 	
-    rtree_index::MongoIO::MongoIO(DBClientBase *USER_CONN)
+    rtree_index::MongoIO::MongoIO(DBClientConnection *USER_CONN)
 	{
 		_conn = 0;
 		//_conn = USER_CONN;
@@ -41,27 +41,29 @@ namespace rtree_index
 	{
 		std::string errmsg;
 		string url = "localhost:" + boost::lexical_cast<string>(serverGlobalParams.port);
-		ConnectionString cs = ConnectionString::parse( url).getValue();
-       // ConnectionString cs(ConnectionString::parse(connectionString));
-        if (!cs.isValid()) {
-           cout << "error parsing url: " << errmsg << endl;
-           return false;
-        }
-		_conn = cs.connect(errmsg).getValue().get();
-        if (!_conn) {
-            cout << "couldn't connect: " << errmsg << endl;
+		HostAndPort hp = HostAndPort(url);
+		_conn = new DBClientConnection();
+		auto status = _conn->connect(hp,
+									 StringData(),
+									 boost::none);
+		if (!status.isOK())
+		{
+			std::cout << "Could not connect " << status.toString() << endl;
 			return false;
-        }
-		 
+		}
+
 		return true;
 	}
 
 	bool rtree_index::MongoIO::isConnected()
 	{
-		if (_conn != 0&&this->_conn->isStillConnected())
+		if (_conn != 0)
+		{
+			_conn->checkConnection();
+			std::cout << "We made it here \n";
 			return true;
-		else
-			return false;
+		}
+		return false;
 	}
 
 	Node rtree_index::MongoIO::Basic_Find_One_Node(mongo::OID k)

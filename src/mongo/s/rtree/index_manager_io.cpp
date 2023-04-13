@@ -184,7 +184,7 @@ namespace index_manager
 		BSONObjBuilder bdr;
 		bdr.append("datanamespace", dbName + "." + storageName);
 		bdr.append("column_name", columnName);
-		bdr.append("index_type", INDEX_TYPE);
+		bdr.append("index_type", (double)INDEX_TYPE);
 		OID tempOID;
 		bdr.append("index_info", tempOID);
 		BSONArrayBuilder mbrbdr;
@@ -221,25 +221,20 @@ namespace index_manager
 
 	int MongoIndexManagerIO::basicModifyIndexType(OperationContext *opCtx, string dbName, string storageName, int Type2Modify)
 	{
+		std::cout << "Inside basicModifyIndexType, update index type to: " << Type2Modify << "\n";
 		BSONObjBuilder condition;
 		condition.append("datanamespace", dbName + "." + storageName);
 		BSONObjBuilder setBuilder;
 		BSONObjBuilder setConditionBuilder;
-		setConditionBuilder.append("index_type", Type2Modify);
+		setConditionBuilder.append("index_type", (double)Type2Modify);
 		setBuilder.append("$set", setConditionBuilder.obj());
-
-		// BSONObjBuilder cmdObj;
-		// cmdObj.append("query", condition.obj());
-		// cmdObj.append("update", setBuilder.obj());
-		// bool ok;
-		// ok = RunWriteCommand(dbName, GeoMeteDataName, cmdObj.obj(), UPDATE);
-		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
 		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
 		uassertStatusOK(status.getStatus());
 		auto conf = Grid::get(opCtx)->shardRegistry();
+		
 		conf->updateGeometry(opCtx, condition.obj(), setBuilder.obj());
-		/*updata*/
-		//_conn->update(_dbName + "." + GeoMeteDataName, Query(condition.obj()), setBuilder.obj());
+
+		// Reset to 0
 		if (Type2Modify == 0)
 		{
 			BSONObjBuilder condition1;
@@ -492,17 +487,11 @@ namespace index_manager
 		}
 		BSONObjBuilder bdr;
 		bdr.append("datanamespace", dbName + "." + storageName);
-		/*findOne*/
-		// BSONObj oneGeoMeteData = _conn->findOne(dbName + "." + GeoMeteDataName, bdr.obj());
-		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
 		auto status = Grid::get(opCtx)->catalogCache()->getDatabase(opCtx, dbName);
 		uassertStatusOK(status.getStatus());
-		std::cout << "Not segfaulting yet version 3333\n";
 		auto conf = Grid::get(opCtx)->shardRegistry();
-		std::cout << "Not segfaulting yet version 3333\n";
 		BSONObj oneGeoMetaData = conf->getGeometry(opCtx, bdr.obj());
 		_columnName = oneGeoMetaData["column_name"].String();
-		std::cout << "Never segfaulted in basicInitStorageTraverse! :D\n";
 	}
 
 	/*
@@ -596,7 +585,7 @@ namespace index_manager
 		BSONObj geoObj = atomdata[columnName].Obj();
 		if (geoObj.isEmpty())
 			return false;
-		GeometryFactory::Ptr factory;
+		GeometryFactory::Ptr factory = GeometryFactory::create();
 		CoordinateArraySequenceFactory csf;
 		geom::Point *pPoint = factory.get()->createPoint(Coordinate(ctx, cty, 0));
 		geom::Geometry *pGeometry = NULL;

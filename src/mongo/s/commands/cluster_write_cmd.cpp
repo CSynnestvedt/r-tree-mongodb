@@ -736,7 +736,6 @@ namespace mongo
         }
         if (!pRTreeIO->isConnected())
             pRTreeIO->connectMyself();
-        std::cout << "Inserting documents ..." << _batchedRequest.getInsertRequest().toBSON({})["documents"].toString() << "\n";
         if (insertStatus.isOK() && _batchedRequest.getBatchType() == BatchedCommandRequest::BatchType_Insert)
         {
 

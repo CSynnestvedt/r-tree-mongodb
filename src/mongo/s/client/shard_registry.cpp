@@ -678,7 +678,7 @@ namespace mongo
         this->_currGeoMeta.datanamespace = bdr["datanamespace"].str();
         this->_currGeoMeta.column_name = bdr["column_name"].str();
         this->_currGeoMeta.gtype = bdr["gtype"].Int();
-        this->_currGeoMeta.index_type = bdr["index_type"].Int();
+        this->_currGeoMeta.index_type = bdr["index_type"].Double();
         this->_currGeoMeta.srid = bdr["srid"].Int();
         this->_currGeoMeta.crs_type = bdr["crs_type"].Int();
         this->_currGeoMeta.tolerance = bdr["tolerance"].Double();
@@ -710,7 +710,7 @@ namespace mongo
             this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
             this->_currGeoMeta.column_name = Geo["column_name"].str();
             this->_currGeoMeta.gtype = Geo["gtype"].Int();
-            this->_currGeoMeta.index_type = Geo["index_type"].Int();
+            this->_currGeoMeta.index_type = Geo["index_type"].Double();
             this->_currGeoMeta.srid = Geo["srid"].Int();
             this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
             this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
@@ -726,11 +726,9 @@ namespace mongo
 
         // Connect and update the query object
         ScopedDbConnection conn(getConfigServerConnectionString());
-        query = CommandHelpers::appendMajorityWriteConcern(query);
         auto reply = conn->updateAcknowledged(GeoMetaData::ConfigNS.ns(), query, obj, false, false, WriteConcernOptions::Majority);
-
+        std::cout << "\n The reply from running the update of meta_geom: " << reply.toString() << "\n";
         auto status = getStatusFromCommandResult(reply);
-        std::cout << "\nThe status from running the command against config svr: " << status.toString() << "\n";
         // Update local struct with the new object
         BSONObj Geo = conn->findOne(GeoMetaData::ConfigNS, query);
         conn.done();
@@ -739,7 +737,7 @@ namespace mongo
             this->_currGeoMeta.datanamespace = Geo["datanamespace"].str();
             this->_currGeoMeta.column_name = Geo["column_name"].str();
             this->_currGeoMeta.gtype = Geo["gtype"].Int();
-            this->_currGeoMeta.index_type = Geo["index_type"].Int();
+            this->_currGeoMeta.index_type = Geo["index_type"].Double();
             this->_currGeoMeta.srid = Geo["srid"].Int();
             this->_currGeoMeta.crs_type = Geo["crs_type"].Int();
             this->_currGeoMeta.tolerance = Geo["tolerance"].Double();
@@ -807,7 +805,7 @@ namespace mongo
         conn.done();
         if (geo.isEmpty())
             return false;
-        return geo["index_type"].Int() != 0;
+        return geo["index_type"].Double() != 0;
     }
 
     bool ShardRegistry::insertIndexMetadata(OperationContext *opCtx, BSONObj bdr)
@@ -845,12 +843,16 @@ namespace mongo
     bool ShardRegistry::updateIndexMetadata(OperationContext *opCtx, BSONObj query, BSONObj obj)
     {
         // LOG COMMAND TO COUT
-        std::cout << "\n updateGeometry: Updating document in meta_rtree: " << query.toString() << " with " << obj.toString() << "\n";
+        std::cout << "\n updateIndexMetadata: Updating document in meta_rtree: " << query.toString() << " with " << obj.toString() << "\n";
 
+       
+        // Connect and update the query object
         ScopedDbConnection conn(getConfigServerConnectionString());
-        auto reply = conn->updateAcknowledged(IndexMetaData::ConfigNS.db().toString(), query, obj, false, false, WriteConcernOptions::Majority);
+        auto reply = conn->updateAcknowledged(IndexMetaData::ConfigNS.ns(), query, obj, false, false, WriteConcernOptions::Majority);
+        std::cout << "\n The reply from running the update of meta_geom: " << reply.toString() << "\n";
+        auto status = getStatusFromCommandResult(reply);
         conn.done();
-        return getStatusFromCommandResult(reply).isOK();
+        return status.isOK();
     }
 
     bool ShardRegistry::deleteIndexMetadata(OperationContext *opCtx, BSONObj query)

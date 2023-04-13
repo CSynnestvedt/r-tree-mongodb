@@ -21,6 +21,7 @@
 #include "mongo/s/rtree/rtree_data_structure.h"
 #include "mongo/s/rtree/index_manager_core.h"
 #include "mongo/s/rtree/geojson_engine.h"
+#include "mongo/client/dbclient_connection.h"
 
 /**
  *Some global objects are defined here

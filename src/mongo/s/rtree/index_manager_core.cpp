@@ -159,8 +159,7 @@ namespace index_manager
 				mongo::OID Root;
 				_Rtree.InsertRoot(opCtx, Root);
 				t->InsertDone(3, "rtree_" + collectionName, rtree_index::INSERT, "InsertRoot");
-
-				std::cout << "\nWe made it past the insert root stage before segfaulting like a boss\n";
+				
 				_IO->basicInitStorageTraverse(opCtx, dbName, collectionName);
 				t->UpdateDone(4, "rtree_" + collectionName, rtree_index::UPDATE, "begin building Rtree index on existing data");
 				std::cout << "\nWe made it past the init storage traverse and update done\n";

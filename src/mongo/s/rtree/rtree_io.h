@@ -26,6 +26,7 @@
 #include <windows.h>
 #endif
 #include <boost/lexical_cast.hpp> 
+#include "mongo/client/dbclient_connection.h"
 #include "write_op.h"
 
 #define RTREECACHE
@@ -50,7 +51,7 @@ namespace rtree_index
 	class MongoIO 
 	{
 	public:
-		MongoIO(DBClientBase *USER_CONN);
+		MongoIO(DBClientConnection *USER_CONN);
 		Node Basic_Find_One_Node(mongo::OID k);
 		int Basic_Delect_Node_By_Key(OperationContext* txn,mongo::OID k,BSONObjBuilder& result);
 		mongo::OID Basic_Generate_Key();
@@ -71,7 +72,7 @@ namespace rtree_index
 		string _Data_CollectionName;
 		int _Max_Node;
 		int _Max_Leaf;
-		DBClientBase* _conn;
+		DBClientConnection* _conn;
 
 	};
 
