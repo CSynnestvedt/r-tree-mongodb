@@ -336,6 +336,7 @@ namespace index_manager
 			/*findOne*/
 			BSONObj index_info = conf->getIndexMetadata(opCtx, indexquerybdr.obj());
 
+			std::cout << "\nThe index info object from rtreeSetInputParamsIfExists: " << index_info.toString() << "\n";
 			theRoot = index_info["index_root"].OID();
 			MAX_NODE = index_info["max_node"].Int();
 			MAX_LEAF = index_info["max_leaf"].Int();
@@ -459,6 +460,7 @@ namespace index_manager
 	bool MongoIndexManagerIO::rtreeSetDataMBR(mongo::BSONObj atomData, string columnName, MBR &returnMBR)
 	{
 		BSONObj GeoObj = atomData[columnName].Obj();
+		std::cout << "Inside rtreeSetDataMBR, printing GeoObj: " << GeoObj.toString() << " and the columnName: "<< columnName << "\n";
 		if (atomData.hasField(columnName))
 		{
 			geojson_engine::GeoJSONPaser::VerifyGeoBSONType(GeoObj, returnMBR);

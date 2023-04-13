@@ -27,6 +27,7 @@ namespace geojson_engine
 	int GeoJSONPaser::GetGeoBSONType(BSONObj obj)
 	{
 		int typeID = -1;
+		std::cout << "Inside GetGeoBSONType, printing obj: " << obj.toString() << "\n";
 		//
 		try
 		{

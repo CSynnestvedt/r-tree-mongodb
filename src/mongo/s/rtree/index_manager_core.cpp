@@ -159,7 +159,7 @@ namespace index_manager
 				mongo::OID Root;
 				_Rtree.InsertRoot(opCtx, Root);
 				t->InsertDone(3, "rtree_" + collectionName, rtree_index::INSERT, "InsertRoot");
-				
+
 				_IO->basicInitStorageTraverse(opCtx, dbName, collectionName);
 				t->UpdateDone(4, "rtree_" + collectionName, rtree_index::UPDATE, "begin building Rtree index on existing data");
 				std::cout << "\nWe made it past the init storage traverse and update done\n";
@@ -254,7 +254,7 @@ namespace index_manager
 						Node RootNode = _RtreeIO->Basic_Find_One_Node(RootKey);
 						std::unique_ptr<RTreeRangeQueryCursor> returnCursor(new RTreeRangeQueryCursor(maxNode, RootNode, _RtreeIO, _IO, pGeometry, dbName, collectionName, cn, 0));
 						returnCursor->InitCursor();
-						return std::move(returnCursor);
+						return returnCursor;
 					}
 					delete pGeometry; // free the memory of geos geos geometry
 				}
@@ -330,7 +330,7 @@ namespace index_manager
 						Node RootNode = _RtreeIO->Basic_Find_One_Node(RootKey);
 						std::unique_ptr<RTreeRangeQueryCursor> returnCursor(new RTreeRangeQueryCursor(maxNode, RootNode, _RtreeIO, _IO, pGeometry, dbName, collectionName, cn, 1));
 						returnCursor->InitCursor();
-						return std::move(returnCursor);
+						return returnCursor;
 					}
 					/*
 					 *  Please Note We should delete pGeometry
@@ -366,7 +366,7 @@ namespace index_manager
 					GeoNearSearchNode *RootN = new GeoNearSearchNode(0, 9999999, 111, rootNode);
 					std::unique_ptr<RTreeGeoNearCursor> TestCursor(new RTreeGeoNearCursor(maxNode, RootN, _RtreeIO, _IO, ctx, cty, rMin, rMax, dbName, collectionName, cn));
 					TestCursor->InitCursor();
-					return std::move(TestCursor);
+					return TestCursor;
 				}
 			}
 		}
