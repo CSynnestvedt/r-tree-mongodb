@@ -695,9 +695,9 @@ namespace mongo
         std::cout << "\n getGeometry: Retrieving metadata from meta_geom " << query.toString() << "\n";
 
         // Check local struct to see if it matches the datanamespace
-        if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["NAMESPACE"].str())
+        if (query.hasField("datanamespace") && _currGeoMeta.datanamespace == query["datanamespace"].str())
         {
-            return this->_currGeoMeta.toBson();
+            return _currGeoMeta.toBson();
         }
 
         // Establish connection and fetch metadata

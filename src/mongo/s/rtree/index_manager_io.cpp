@@ -491,7 +491,7 @@ namespace index_manager
 			_currentCursor = _conn->find(request);
 		}
 		BSONObjBuilder bdr;
-		bdr.append("datanamespace  ", dbName + "." + storageName);
+		bdr.append("datanamespace", dbName + "." + storageName);
 		/*findOne*/
 		// BSONObj oneGeoMeteData = _conn->findOne(dbName + "." + GeoMeteDataName, bdr.obj());
 		// auto status = grid.catalogCache()->getDatabase(opCtx, dbName);
