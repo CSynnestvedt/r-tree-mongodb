@@ -280,7 +280,7 @@ namespace mongo
             // {insert: "locations"}
             std::string commandName = jsobj.firstElementFieldName();
             std::string dbname = nss.dbName().db();
-            std::string collName = jsobj[commandName];
+            std::string collName = nss.coll().toString();
             std::string columnName;
             BSONObj query_condition;
 
@@ -299,7 +299,7 @@ namespace mongo
             BSONElement geowithincomm;
             BSONObj geometry;
             BSONObj type;
-            BSONObj filter = jsobj["filter"].Obj();
+
 
             double maxDistance = 100;
             double minDistance = 0;
@@ -319,11 +319,16 @@ namespace mongo
             params.lsid = opCtx->getLogicalSessionId();
             params.txnNumber = opCtx->getTxnNumber();
 
-            // {filter: {0: "theFilterValue"}}
+            BSONObj filter = jsobj["filter"].Obj();
+            std::cout << "Logging the filter object: " << filter.toString() << "\n";
+            // {find: geodata}{filter: {column_name: {near: {geometry: {type: "Point", minDistance: double, maxDistance: double, coordinates: [x, y]}}}}}
+            std::cout << "Logging the first element of the filter: " << std::string(filter.firstElement().fieldName()) << "==" << columnName << "\n";
             if (!filter.isEmpty() && columnName.compare(std::string(filter.firstElement().fieldName())) == 0 && filter.firstElement().isABSONObj())
             {
+                std::cout << "The conditions for the if statement were met and we made it in here.\n";
                 is_registered = true; // we find the geometadata in config server
                 geowithincomm = filter.firstElement().Obj().firstElement();
+                std::cout << "Logging geoWithinComm: " << geowithincomm.toString() << "\n"; 
                 if ("geoWithin" == std::string(geowithincomm.fieldName()))
                 {
                     is_command_geowithin = true;
@@ -364,20 +369,17 @@ namespace mongo
                 }
             }
 
-            // Got here at least
-            /*
-             * because ccc is mongo_disallow_copying, we can't just create an
-             * empty ccc object and construct in different conditions
-             * we copy the code 3 times
-             * hope there is a better way
-             */
             int cursorMode = is_command_geowithin ? 1 : 0;
             auto createCursorClientGuard = [&](int cursorMode, bool isCmdGeonear, bool isTypePoint)
             {
+                if (isCmdGeonear)
                 {
                     BSONObj coords = query_condition["coordinates"].Obj();
                     vector<BSONElement> vv;
                     coords.elems(vv);
+                    std::cout << "Create RtreeNearClusterClientCursor with params: \n collName: " << \
+                    collName << "\n coordinates: [" << vv[0].Number() << ", " << vv[1].Number() << "]\n" \
+                    << "minDist: " << minDistance << "maxDist: " << maxDistance << "\n";
                     return RTreeNearClusterClientCursorImpl::make(opCtx,
                                                                   Grid::get(opCtx)->getExecutorPool()->getArbitraryExecutor(),
                                                                   dbname,
@@ -387,6 +389,9 @@ namespace mongo
                                                                   minDistance,
                                                                   maxDistance, std::move(params));
                 }
+                std::cout << "Create RtreeRangeClusterClientCursor with params: \n collName: " << \
+                    collName << "\n queryCondition: " << query_condition.toString() << "\n" \
+                    << "cursorMode: " << cursorMode << "\n";
                 return RTreeRangeClusterClientCursorImpl::make(opCtx, Grid::get(opCtx)->getExecutorPool()->getArbitraryExecutor(), dbname, collName, query_condition, cursorMode, std::move(params));
             };
 
@@ -441,11 +446,8 @@ namespace mongo
                 // params.compareWholeSortKeyOnRouter = compareWholeSortKeyOnRouter;
             }
 
-            std::cout << "\nGot to the CCC\n";
-
             auto ccc = createCursorClientGuard(cursorMode, is_command_geonear, is_type_point);
 
-            std::cout << "\n Got past the RTreeRangeCluster make command \n";
 
             // Retrieve enough data from the ClusterClientCursor for the first batch of results.
 
@@ -493,8 +495,6 @@ namespace mongo
                 ignoringInterrupts = true;
             }
 
-            std::cout << "\nGOT HERE!!!!!!!!!!!!\n";
-
             auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
             size_t bytesBuffered = 0;
             // This loop will load enough results from the shards for a full first batch.  At first, these
@@ -502,7 +502,7 @@ namespace mongo
             // ClusterClientCursor::next will fetch further results if necessary.
             while (!FindCommon::enoughForFirstBatch(findCommand, results->size()))
             {
-                std::cout << "\n Something is about to go down!!\n";
+                std::cout << "\n Program segfaults here ->\n";
                 auto nextWithStatus = ccc->next();
                 if (findCommand.getAllowPartialResults() &&
                     (nextWithStatus.getStatus() == ErrorCodes::MaxTimeMSExpired))

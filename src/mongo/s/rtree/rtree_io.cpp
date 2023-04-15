@@ -84,10 +84,6 @@ namespace rtree_index
 		}
 #endif
 		
-		
-		
-		BSONObjBuilder bdr;
-		bdr.append("_id", k);
 
 		/*
 		 * lock _conn first
@@ -100,10 +96,16 @@ namespace rtree_index
 			{
 				connectMyself();
 			}
-			FindCommandRequest findRequest();
 			
 			NamespaceString ns = NamespaceString(_dbName + "." + "rtree_" + _Data_CollectionName);
-		    theNodeBSON = _conn->findOne(ns, bdr.obj());
+			// FindCommandRequest request(ns);
+			// request.setLimit(1);
+			// BSONObj filterObj = ;
+			// request.setFilter(filterObj);
+			// auto cursor = _conn->find(request);
+			// theNodeBSON = cursor->more() ? cursor->nextSafe() : BSONObj{};
+		    theNodeBSON = _conn->findOne(ns, BSON("_id" << BSON("$eq" << k)));
+			std::cout << "Made it \n";
 		}
 	
 		if (!theNodeBSON.isEmpty())
@@ -346,10 +348,6 @@ int nodeInCacheBranchCount = 0;
 }
 #endif
 	
-	
-	
-		BSONObjBuilder bdr;
-		bdr.append("_id", targetOID);
         BSONObj theNodeBSON;
 		/*findoOne*/
 		{
@@ -359,7 +357,7 @@ int nodeInCacheBranchCount = 0;
 				connectMyself();
 		    }
 			NamespaceString ns = NamespaceString(_dbName + "." + "rtree_" + _Data_CollectionName);
-		    theNodeBSON = _conn->findOne(ns, bdr.obj());
+		    theNodeBSON = _conn->findOne(ns, BSON("_id" << BSON("$eq" << targetOID)));
 		}
 
 #ifdef RTREECACHE 

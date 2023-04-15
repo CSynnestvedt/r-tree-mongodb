@@ -362,7 +362,9 @@ namespace index_manager
 				if (_IO->rtreeSetInputParamsIfExists(opCtx, dbName, collectionName, RootKey, maxNode, maxLeaf, cn))
 				{
 					_RtreeIO->Configure(dbName, collectionName, maxNode, maxLeaf);
+					std::cout << "We fail on the next line -> because of ID error \n";
 					Node rootNode = _RtreeIO->Basic_Find_One_Node(RootKey);
+					std::cout << "We made it to after find one node\n";
 					GeoNearSearchNode *RootN = new GeoNearSearchNode(0, 9999999, 111, rootNode);
 					std::unique_ptr<RTreeGeoNearCursor> TestCursor(new RTreeGeoNearCursor(maxNode, RootN, _RtreeIO, _IO, ctx, cty, rMin, rMax, dbName, collectionName, cn));
 					TestCursor->InitCursor();

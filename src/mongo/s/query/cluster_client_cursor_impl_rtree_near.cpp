@@ -138,7 +138,7 @@ namespace mongo
             _maxTimeMSExpired |= (interruptStatus.code() == ErrorCodes::MaxTimeMSExpired);
             return interruptStatus;
         }
-
+        std::cout << "We made it into the next function call in RtreeNearClusterClientCursorImpl\n";
         // First return stashed results, if there are any.
         if (!_stash.empty())
         {
@@ -147,7 +147,7 @@ namespace mongo
             ++_numReturnedSoFar;
             return {front};
         }
-
+        
         auto next = _rtreeGeoNearCursor->Next();
         if (!next.isEmpty())
         {

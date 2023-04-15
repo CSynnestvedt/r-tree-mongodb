@@ -395,6 +395,7 @@ namespace rtree_index
 
 	bool rtree_index::RTreeGeoNearCursor::InitCursor()
 	{
+		std::cout << "We made it here to InitCursor()\n";
 		int Level = _root_node->data.Level;
 		_max_level = Level;
 		for (int i = 0; i < Level; i++)
@@ -432,6 +433,7 @@ namespace rtree_index
 
 	mongo::BSONObj rtree_index::RTreeGeoNearCursor::Next()
 	{
+		std::cout << "Inside RtreeGeoNearCursor::Next() function in rtree folder, made it here \n";
 		// if _closestBarrel[0].size()==0, it means there are no NNC found, no extra result was found.
 		if (_closestBarrel[0].size() == 0)
 		{
@@ -564,7 +566,7 @@ namespace rtree_index
 			{
 				_Need2ReformCmpVectors[i] = false;
 			}
-
+			std::cout << "We made it to right before basicFindNodeById\n";
 			return _DataIO->basicFindNodeById(_db_name, _collection_name, returnKey);
 		}
 	}

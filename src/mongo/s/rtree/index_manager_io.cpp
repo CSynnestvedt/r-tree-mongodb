@@ -95,7 +95,7 @@ namespace index_manager
 				connectMyself();
 			}
 			NamespaceString ns = NamespaceString(dbName + "." + storageName);
-			returnBSONOBJ = _conn->findOne(ns, bdr.obj());
+			returnBSONOBJ = _conn->findOne(ns, BSON("_id" << BSON("$eq" << Data2Fetch)));
 		}
 		return returnBSONOBJ;
 	}

@@ -234,9 +234,6 @@ namespace mongo
 
                 auto findCommand = _parseCmdObjectToFindCommandRequest(opCtx, ns(), _request.body);
 
-                std::cout << "\nThis is the request body you were looking to investigate: \n"
-                          << _request.body.toString() << "\n";
-
                 const boost::intrusive_ptr<ExpressionContext> expCtx;
                 auto cq = uassertStatusOK(
                     CanonicalQuery::canonicalize(opCtx,
@@ -253,9 +250,11 @@ namespace mongo
                     bool partialResultsReturned = false;
                     std::vector<BSONObj> batch;
                     CursorId cursorId;
-                    if (_request.body.hasField("filter") && _request.body["filter"].isABSONObj() && ("geoWithin" == std::string(_request.body["filter"].Obj().firstElement().fieldName()) || "geoIntersects" == std::string(_request.body["filter"].Obj().firstElement()) || "near" == std::string(_request.body["filter"].Obj().firstElement())))
+
+                    std::cout << _request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData() << "\n\n";
+                    std::cout << std::string(_request.body["filter"].Obj().firstElement().fieldName()) << "\n\n";
+                    if (_request.body.hasField("filter") && ("geoWithin" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData()) || "geoIntersects" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData()) || "near" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData())))
                     {
-                        BSONElement filterCommand = _request.body["filter"].Obj().firstElement();
                         std::cout << "\nCalling the correct run query function \n";
                         cursorId = ClusterFind::runQuery(opCtx, ns(), _request.body, *cq, ReadPreferenceSetting::get(opCtx), &batch, &partialResultsReturned);
                     }
