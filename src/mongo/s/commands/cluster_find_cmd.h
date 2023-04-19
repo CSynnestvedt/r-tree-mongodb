@@ -250,17 +250,14 @@ namespace mongo
                     bool partialResultsReturned = false;
                     std::vector<BSONObj> batch;
                     CursorId cursorId;
-
-                    std::cout << _request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData() << "\n\n";
-                    std::cout << std::string(_request.body["filter"].Obj().firstElement().fieldName()) << "\n\n";
-                    if (_request.body.hasField("filter") && ("geoWithin" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData()) || "geoIntersects" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData()) || "near" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData())))
+                    
+                    if (_request.body.hasField("filter") && _request.body["filter"].isABSONObj() && !_request.body["filter"].Obj().isEmpty()
+                     &&("geoWithin" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData()) || "geoIntersects" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData()) || "near" == std::string(_request.body["filter"].Obj().firstElement().Obj().firstElementFieldNameStringData())))
                     {
-                        std::cout << "\nCalling the correct run query function \n";
                         cursorId = ClusterFind::runQuery(opCtx, ns(), _request.body, *cq, ReadPreferenceSetting::get(opCtx), &batch, &partialResultsReturned);
                     }
                     else
                     {
-                        std::cout << "\n wrong run query!!!!!!!!!!!!!!!!! \n";
                         cursorId = ClusterFind::runQuery(
                             opCtx, *cq, ReadPreferenceSetting::get(opCtx), &batch, &partialResultsReturned);
                     }

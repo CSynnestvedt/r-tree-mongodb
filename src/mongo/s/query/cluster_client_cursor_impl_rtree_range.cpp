@@ -119,7 +119,7 @@ namespace mongo
                                                                          std::string collectionName,
                                                                          mongo::BSONObj InputGeometry,
                                                                          int queryType,
-                                                                         ClusterClientCursorParams &&params) : _params(std::move(params)), _root(buildMergerPlan(opCtx, std::move(executor), &_params)), _opCtx(opCtx)
+                                                                         ClusterClientCursorParams &&params) : _params(std::move(params)), _root(buildMergerPlan(opCtx, std::move(executor), &_params)), _opCtx(opCtx), _lsid(opCtx->getLogicalSessionId())
     {
         if (queryType == 0) //$geoIntersects
         {
@@ -167,6 +167,7 @@ namespace mongo
             {
                 _isRtreeCursorOK = false;
                 _rtreeRangeQueryCursor->FreeCursor();
+                return ClusterQueryResult();
             }
         }
         return ClusterQueryResult(next);

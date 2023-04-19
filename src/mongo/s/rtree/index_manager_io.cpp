@@ -611,6 +611,8 @@ namespace index_manager
 		try
 		{
 			int parseSt = _MGP.DataType2Geometry(Geometry2Parser, parsedGeometry);
+			std::cout << "We made it here with parseSt: " << parseSt << "\n";
+			std::cout << "parsedGeometry: " << parsedGeometry->toString() << "\n";
 			if (parseSt == 1) // parseSuccess
 				return true;
 			else

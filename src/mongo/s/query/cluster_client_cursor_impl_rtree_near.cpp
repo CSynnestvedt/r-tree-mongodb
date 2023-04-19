@@ -119,7 +119,7 @@ namespace mongo
                                                                        double cty,
                                                                        double rMin,
                                                                        double rMax,
-                                                                       ClusterClientCursorParams &&params) : _params(std::move(params)), _root(buildMergerPlan(txn, std::move(executor), &_params)), _opCtx(txn)
+                                                                       ClusterClientCursorParams &&params) : _params(std::move(params)), _root(buildMergerPlan(txn, std::move(executor), &_params)), _opCtx(txn), _lsid(txn->getLogicalSessionId())
     {
         _rtreeGeoNearCursor = IM.GeoSearchNear(txn, DB_NAME, COLLECTION_NAME, ctx, cty, rMin, rMax);
         _isRtreeCursorOK = true;
@@ -152,6 +152,14 @@ namespace mongo
         if (!next.isEmpty())
         {
             ++_numReturnedSoFar;
+        } else
+        {
+            if (_isRtreeCursorOK)
+            {
+                _isRtreeCursorOK = false;
+                _rtreeGeoNearCursor->FreeCursor();
+                return ClusterQueryResult();
+            }
         }
 
         return ClusterQueryResult(next);

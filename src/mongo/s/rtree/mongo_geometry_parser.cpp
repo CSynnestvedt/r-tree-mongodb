@@ -51,7 +51,7 @@ namespace geometry_parser
 				return GEOM_INVALID_NO_ENOUGH_POINT_IN_RING;
 			}
 
-			CoordinateSequence::Ptr cs = csf->create(L.size(), 2);
+			CoordinateSequence::Ptr cs = csf->instance()->create(L.size(), 2);
 
 			for (unsigned int i = 0; i < L.size(); i++)
 			{
@@ -73,22 +73,22 @@ namespace geometry_parser
 			}
 			if (j == 0)
 			{
-				shellRing = factory.get()->createLinearRing(cs.get());
+				shellRing = factory.get()->createLinearRing(*cs);
 			}
 			/*if exist holes*/
 			else
 			{
-				LinearRing *oneHole = factory.get()->createLinearRing(cs.get());
+				LinearRing *oneHole = factory.get()->createLinearRing(*cs);
 				holes->push_back(oneHole);
 			}
 		}
-		/*
+		/*GeometryFactory
 		Pay attention to memory leak here!
 		shellRing and hole will be deleted by ~Polygon()
 		so please make sure that returePolygon is deleted
 		after the finishing his job out of this functions
 		*/
-		returnPolygon = factory.get()->createPolygon(shellRing, holes);
+		returnPolygon = factory.get()->createPolygon(*shellRing, *holes);
 		return GEOM_PARSE_SUCCESS;
 	}
 
@@ -98,18 +98,24 @@ namespace geometry_parser
 		{
 			return GEOM_INVALID_GEOJSON_FORMAT;
 		}
+
 		BSONObj coordinateObj = GeometryData["coordinates"].Obj();
 		vector<BSONElement> L;
 		coordinateObj.elems(L);
+		std::cout << "PRinting the L list of coordinates: " << L.data()->toString() << "\n";
 		if (L.size() < 2)
 		{
 			return GEOM_INVALID_NO_ENOUGH_POINT_IN_LINESTRING;
 		}
 		/*new here*/
-		CoordinateSequence::Ptr cs = csf->create(L.size(), 2);
+		std::cout << "We made it into DataType2LineString with GeometryData: " << GeometryData.toString() << "\n";
+		CoordinateSequence::Ptr cs = csf->instance()->create(L.size(), 2);
+		
+		std::cout << "Nothing wrong with csf \n";
 		for (unsigned int i = 0; i < L.size(); i++)
 		{
 			BSONObj arrobj = L[i].Obj();
+			std::cout << "Logging arrobj: " << arrobj.toString() << "\n";
 			vector<BSONElement> coord;
 			arrobj.elems(coord);
 			if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
@@ -130,9 +136,9 @@ namespace geometry_parser
 		so please make sure that returnLinerString is deleted
 		after the finishing his job out of this functions
 		*/
-		returnLinerString = factory.get()->createLineString(cs.get());
+		returnLinerString = factory.get()->createLineString(*cs);
+		std::cout << "Printing the returnLinerString: " << returnLinerString->toString() << "\n";
 		return GEOM_PARSE_SUCCESS;
-		return false;
 	}
 
 	int geometry_parser::MongoGeometryParser::DataType2Point(BSONObj GeometryData, geom::Point *&returnPoint)
@@ -180,7 +186,7 @@ namespace geometry_parser
 				return GEOM_INVALID_NO_ENOUGH_POINT_IN_LINESTRING;
 			}
 			/*new here*/
-			CoordinateSequence::Ptr cs = csf->create(L.size(), 2);
+			CoordinateSequence::Ptr cs = csf->instance()->create(L.size(), 2);
 			for (unsigned int i = 0; i < L.size(); i++)
 			{
 				BSONObj arrobj = L[i].Obj();
@@ -198,7 +204,7 @@ namespace geometry_parser
 					return GEOM_INVALID_GEOJSON_FORMAT;
 				}
 			}
-			geom::Geometry *pOneLine = factory.get()->createLineString(cs.get());
+			geom::Geometry *pOneLine = factory.get()->createLineString(*cs);;
 			LineStrings->push_back(pOneLine);
 		}
 		/*
@@ -297,7 +303,7 @@ namespace geometry_parser
 					return GEOM_INVALID_NO_ENOUGH_POINT_IN_RING;
 				}
 
-				CoordinateSequence::Ptr cs = csf->create(L.size(), 2);
+				CoordinateSequence::Ptr cs = csf->instance()->create(L.size(), 2);
 				for (unsigned int i = 0; i < L.size(); i++)
 				{
 					BSONObj arrobj = L[i].Obj();
@@ -483,42 +489,43 @@ namespace geometry_parser
 		}
 		if (typeString == "LineString")
 		{
-			geom::LineString *pgeo = NULL;
+			geom::LineString *pgeo = nullptr;
 			int returnValue = DataType2LineString(GeometryData, pgeo);
+			std::cout << "Printing pgeo: " << pgeo->toString() << "\n";
 			returnGeometry = pgeo;
 			return returnValue;
 		}
 		if (typeString == "Polygon")
 		{
-			geom::Polygon *pgeo = NULL;
+			geom::Polygon *pgeo = nullptr;
 			int returnValue = DataType2Polygon(GeometryData, pgeo);
 			returnGeometry = pgeo;
 			return returnValue;
 		}
 		if (typeString == "GeometryCollection")
 		{
-			geom::GeometryCollection *pgeo = NULL;
+			geom::GeometryCollection *pgeo = nullptr;
 			int returnValue = DataType2GeometryCollection(GeometryData, pgeo);
 			returnGeometry = pgeo;
 			return returnValue;
 		}
 		if (typeString == "MultiPoint")
 		{
-			geom::MultiPoint *pgeo = NULL;
+			geom::MultiPoint *pgeo = nullptr;
 			int returnValue = DataType2MutiPoint(GeometryData, pgeo);
 			returnGeometry = pgeo;
 			return returnValue;
 		}
 		if (typeString == "MultiLineString")
 		{
-			geom::MultiLineString *pgeo = NULL;
+			geom::MultiLineString *pgeo = nullptr;
 			int returnValue = DataType2MutiLineString(GeometryData, pgeo);
 			returnGeometry = pgeo;
 			return returnValue;
 		}
 		if (typeString == "MultiPolygon")
 		{
-			geom::MultiPolygon *pgeo = NULL;
+			geom::MultiPolygon *pgeo = nullptr;
 			int returnValue = DataType2MutiPolygon(GeometryData, pgeo);
 			returnGeometry = pgeo;
 			return returnValue;

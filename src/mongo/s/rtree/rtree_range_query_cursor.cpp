@@ -46,22 +46,20 @@ namespace rtree_index
 	}
 
 	void rtree_index::RTreeRangeQueryCursor::InitCursor()
-	{
-
+	{	
 		_NodeStack.push(_Root_Node);
 		_NodeIDStack.push(-1); // please note we init the value -1 for the root level,so ++ will be 0
 		while (!_NodeStack.empty())
 		{
 			Node CurrentNode = _NodeStack.top();
-			int CurrentID = _NodeIDStack.top(); // fatch the current pos of this level
+			int CurrentID = _NodeIDStack.top();
 			if (CurrentID < _max_node - 1)		//== will exceed the array boundary
 			{
 				_NodeIDStack.top()++;
 				if (CurrentNode.Branchs[_NodeIDStack.top()].HasData)
 				{
-
 					MBR m = CurrentNode.Branchs[_NodeIDStack.top()].mbr;
-					CoordinateSequence::Ptr cs = csf->create(5, 2);
+					CoordinateSequence::Ptr cs = csf->instance()->create(5, 2);
 					cs->setAt(Coordinate(m.MinX, m.MinY, 0), 0);
 					cs->setAt(Coordinate(m.MaxX, m.MinY, 0), 1);
 					cs->setAt(Coordinate(m.MaxX, m.MaxY, 0), 2);
@@ -76,8 +74,10 @@ namespace rtree_index
 						{
 							if (CurrentNode.Level == 0)
 							{
+
 								if (_SearchGeometry->contains(pPolygon))
 								{
+
 									satisfyCond = true;
 								}
 							}
@@ -90,7 +90,9 @@ namespace rtree_index
 							}
 						}
 						if (_queryType == 1)
-						{
+
+						{ 						
+							std::cout << "SearchGeometry: " << _SearchGeometry->toString() << "\n";
 							if (_SearchGeometry->intersects(pPolygon))
 							{
 								satisfyCond = true;
@@ -101,20 +103,18 @@ namespace rtree_index
 							if (CurrentNode.Level == 0)
 							{
 								_Current_Target = CurrentNode.Branchs[_NodeIDStack.top()].ChildKey;
-
-								delete pPolygon;
+								// delete pPolygon; <-- triggers segfault, but might cause a memory leak without (no clue)
 								break;
 							}
 							else // Level>0
 							{
 								Node tempNode = _IO->Basic_Find_One_Node(CurrentNode.Branchs[_NodeIDStack.top()].ChildKey);
-
 								_NodeStack.push(tempNode);
 								_NodeIDStack.push(-1);
 							}
 						}
 					}
-					delete pPolygon; // LinearRing will be delete by ~Polygon() automatically
+					// delete pPolygon; <-- triggers segfault, might trigger mem leak (no clue)
 				}
 			}
 			else
@@ -124,6 +124,7 @@ namespace rtree_index
 				_NodeIDStack.pop();
 			}
 		}
+		std::cout << "Made it to the end of InitCursor :)\n";
 		_isFirstTime = true;
 	}
 
@@ -150,7 +151,7 @@ namespace rtree_index
 				{
 
 					MBR m = CurrentNode.Branchs[_NodeIDStack.top()].mbr;
-					CoordinateSequence::Ptr cs = csf->create(5, 2);
+					CoordinateSequence::Ptr cs = csf->instance()->create(5, 2);
 					cs->setAt(Coordinate(m.MinX, m.MinY, 0), 0);
 					cs->setAt(Coordinate(m.MaxX, m.MinY, 0), 1);
 					cs->setAt(Coordinate(m.MaxX, m.MaxY, 0), 2);
@@ -198,7 +199,7 @@ namespace rtree_index
 									{
 										_Current_Target = CurrentNode.Branchs[_NodeIDStack.top()].ChildKey;
 										hasMore = true;
-										delete pPolygon;
+										// delete pPolygon; suspects this creates a segfault, removed temporarily
 										break;
 									}
 								}
@@ -208,7 +209,7 @@ namespace rtree_index
 									{
 										_Current_Target = CurrentNode.Branchs[_NodeIDStack.top()].ChildKey;
 										hasMore = true;
-										delete pPolygon;
+										// delete pPolygon;  suspects this creates a segfault, removed temporarily
 										break;
 									}
 								}
@@ -229,7 +230,8 @@ namespace rtree_index
 							}
 						}
 					}
-					delete pPolygon; // LinearRing will be delete by ~Polygon() automatically
+					// suspects this creates a segfault, removed temporarily
+					// delete pPolygon; // LinearRing will be delete by ~Polygon() automatically
 				}
 			}
 			else
@@ -241,13 +243,9 @@ namespace rtree_index
 		}
 		if (hasMore)
 		{
-
-			_DataIO->basicFindNodeById(_DB_NAME, _COLLECTION_NAME, _Current_Target);
+			return _DataIO->basicFindNodeById(_DB_NAME, _COLLECTION_NAME, _Current_Target);
 		}
-		else
-		{
-			return mongo::BSONObj();
-		}
+		return mongo::BSONObj();
 	}
 
 	void rtree_index::RTreeRangeQueryCursor::FreeCursor()
