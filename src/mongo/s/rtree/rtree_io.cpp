@@ -60,7 +60,6 @@ namespace rtree_index
 		if (_conn != 0)
 		{
 			_conn->checkConnection();
-			std::cout << "We made it here \n";
 			return true;
 		}
 		return false;
@@ -98,14 +97,7 @@ namespace rtree_index
 			}
 			
 			NamespaceString ns = NamespaceString(_dbName + "." + "rtree_" + _Data_CollectionName);
-			// FindCommandRequest request(ns);
-			// request.setLimit(1);
-			// BSONObj filterObj = ;
-			// request.setFilter(filterObj);
-			// auto cursor = _conn->find(request);
-			// theNodeBSON = cursor->more() ? cursor->nextSafe() : BSONObj{};
 		    theNodeBSON = _conn->findOne(ns, BSON("_id" << BSON("$eq" << k)));
-			std::cout << "Made it \n";
 		}
 	
 		if (!theNodeBSON.isEmpty())

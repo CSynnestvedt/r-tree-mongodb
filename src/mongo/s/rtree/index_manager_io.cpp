@@ -66,7 +66,6 @@ namespace index_manager
 		if (_conn != 0)
 		{
 			_conn->checkConnection();
-			std::cout << "We made it here \n";
 			return true;
 		}
 		return false;
@@ -221,7 +220,6 @@ namespace index_manager
 
 	int MongoIndexManagerIO::basicModifyIndexType(OperationContext *opCtx, string dbName, string storageName, int Type2Modify)
 	{
-		std::cout << "Inside basicModifyIndexType, update index type to: " << Type2Modify << "\n";
 		BSONObjBuilder condition;
 		condition.append("datanamespace", dbName + "." + storageName);
 		BSONObjBuilder setBuilder;
@@ -335,8 +333,6 @@ namespace index_manager
 
 			/*findOne*/
 			BSONObj index_info = conf->getIndexMetadata(opCtx, indexquerybdr.obj());
-
-			std::cout << "\nThe index info object from rtreeSetInputParamsIfExists: " << index_info.toString() << "\n";
 			theRoot = index_info["index_root"].OID();
 			MAX_NODE = index_info["max_node"].Int();
 			MAX_LEAF = index_info["max_leaf"].Int();
@@ -460,7 +456,6 @@ namespace index_manager
 	bool MongoIndexManagerIO::rtreeSetDataMBR(mongo::BSONObj atomData, string columnName, MBR &returnMBR)
 	{
 		BSONObj GeoObj = atomData[columnName].Obj();
-		std::cout << "Inside rtreeSetDataMBR, printing GeoObj: " << GeoObj.toString() << " and the columnName: "<< columnName << "\n";
 		if (atomData.hasField(columnName))
 		{
 			geojson_engine::GeoJSONPaser::VerifyGeoBSONType(GeoObj, returnMBR);
@@ -611,8 +606,6 @@ namespace index_manager
 		try
 		{
 			int parseSt = _MGP.DataType2Geometry(Geometry2Parser, parsedGeometry);
-			std::cout << "We made it here with parseSt: " << parseSt << "\n";
-			std::cout << "parsedGeometry: " << parsedGeometry->toString() << "\n";
 			if (parseSt == 1) // parseSuccess
 				return true;
 			else

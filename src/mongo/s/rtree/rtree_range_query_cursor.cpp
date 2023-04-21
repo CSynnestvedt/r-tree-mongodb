@@ -92,7 +92,6 @@ namespace rtree_index
 						if (_queryType == 1)
 
 						{ 						
-							std::cout << "SearchGeometry: " << _SearchGeometry->toString() << "\n";
 							if (_SearchGeometry->intersects(pPolygon))
 							{
 								satisfyCond = true;
@@ -124,7 +123,6 @@ namespace rtree_index
 				_NodeIDStack.pop();
 			}
 		}
-		std::cout << "Made it to the end of InitCursor :)\n";
 		_isFirstTime = true;
 	}
 

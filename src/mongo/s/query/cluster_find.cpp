@@ -320,12 +320,10 @@ namespace mongo
             params.txnNumber = opCtx->getTxnNumber();
 
             BSONObj filter = jsobj["filter"].Obj();
-            std::cout << "Logging the filter object: " << filter.toString() << "\n";
             // {find: geodata}{filter: {column_name: {near: {geometry: {type: "Point", minDistance: double, maxDistance: double, coordinates: [x, y]}}}}}
             std::cout << "Logging the first element of the filter: " << std::string(filter.firstElement().fieldName()) << "==" << columnName << "\n";
             if (!filter.isEmpty() && columnName.compare(std::string(filter.firstElement().fieldName())) == 0 && filter.firstElement().isABSONObj())
             {
-                std::cout << "The conditions for the if statement were met and we made it in here.\n";
                 is_registered = true; // we find the geometadata in config server
                 geowithincomm = filter.firstElement().Obj().firstElement();
                 std::cout << "Logging geoWithinComm: " << geowithincomm.toString() << "\n"; 
@@ -350,12 +348,15 @@ namespace mongo
                 {
                     is_command_geonear = true;
                     geometry = geowithincomm.Obj();
+                    std::cout << "Geometry object: " << geometry.toString() << "\n";
                     if (geometry.firstElement().fieldName() != NULL && (geometry.hasField("geometry")))
                     {
-                        if (geometry.hasField("maxDistance"))
-                            maxDistance = geometry["maxDistance"].numberDouble();
-                        if (geometry.hasField("minDistance"))
-                            minDistance = geometry["minDistance"].numberDouble();
+                        auto insideGeometry = geometry["geometry"].Obj();
+                        std::cout << "insideGeometry object: " << insideGeometry.toString() << "\n";
+                        if (insideGeometry.hasField("maxDistance"))
+                            maxDistance = insideGeometry["maxDistance"].numberDouble();
+                        if (insideGeometry.hasField("minDistance"))
+                            minDistance = insideGeometry["minDistance"].numberDouble();
                         BSONObjBuilder query_condition_builder;
                         query_condition_builder.appendElements(geometry["geometry"].Obj());
                         // here unnecessary $minDistance and $maxDistance is appended
@@ -502,17 +503,13 @@ namespace mongo
             // ClusterClientCursor::next will fetch further results if necessary.
             while (!FindCommon::enoughForFirstBatch(findCommand, results->size()))
             {
-                std::cout << "\n Program segfaults here ->\n";
                 auto nextWithStatus = ccc->next();
                 if (findCommand.getAllowPartialResults() &&
                     (nextWithStatus.getStatus() == ErrorCodes::MaxTimeMSExpired))
                 {
-                    std::cout << "\nHello darkness, ";
                     if (ccc->remotesExhausted())
                     {
-                        std::cout << "\nmy old friend\n";
                         cursorState = ClusterCursorManager::CursorState::Exhausted;
-                        std::cout << "\nI've come to talk";
                         break;
                     }
                     // Continue because there may be results waiting from other remotes.
@@ -525,22 +522,17 @@ namespace mongo
                 }
                 if (nextWithStatus.getValue().isEOF())
                 {
-                    std::cout << " with you again \n";
                     // We reached end-of-stream. If the cursor is not tailable, then we mark it as
                     // exhausted. If it is tailable, usually we keep it open (i.e. "NotExhausted") even
                     // when we reach end-of-stream. However, if all the remote cursors are exhausted, there
                     // is no hope of returning data and thus we need to close the mongos cursor as well.
                     if (!ccc->isTailable() || ccc->remotesExhausted())
                     {
-                        std::cout << "\nBecause a vision softly creeping\n";
                         cursorState = ClusterCursorManager::CursorState::Exhausted;
-                    std:
-                        cout << "\nLeft its seeds while I was sleeping\n";
                     }
                     break;
                 }
 
-                std::cout << "\nAnd the vision that was planted in my brain \n";
 
                 auto nextObj = *(nextWithStatus.getValue().getResult());
 
@@ -548,19 +540,16 @@ namespace mongo
                 // for later.
                 if (!FindCommon::haveSpaceForNext(nextObj, results->size(), bytesBuffered))
                 {
-                    std::cout << "\nStill remains\n";
                     ccc->queueResult(nextObj);
                     break;
                 }
 
                 // Add doc to the batch. Account for the space overhead associated with returning this doc
                 // inside a BSON array.
-                std::cout << "\nWithin the sound of silence\n";
                 bytesBuffered += (nextObj.objsize() + kPerDocumentOverheadBytesUpperBound);
                 results->push_back(std::move(nextObj));
             }
 
-            std::cout << "\nWe got here!!!!!! \n";
 
             if (ignoringInterrupts)
             {
@@ -584,13 +573,11 @@ namespace mongo
                 cursorState = ClusterCursorManager::CursorState::Exhausted;
             }
 
-            std::cout << "\nGonna fail after this \n";
 
             // Fill out query exec properties.
             CurOp::get(opCtx)->debug().nShards = ccc->getNumRemotes();
             CurOp::get(opCtx)->debug().nreturned = results->size();
 
-            std::cout << "\n Did not fail!!!! \n";
 
             // If the caller wants to know whether the cursor returned partial results, set it here.
             if (partialResultsReturned)
@@ -614,7 +601,6 @@ namespace mongo
 
             // Register the cursor with the cursor manager for subsequent getMore's.
 
-            std::cout << "\nShit's about to go down\n";
 
             auto cursorManager = Grid::get(opCtx)->getCursorManager();
             const auto cursorLifetime = findCommand.getNoCursorTimeout()
@@ -623,7 +609,6 @@ namespace mongo
             auto authUser = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserName();
             ccc->incNBatches();
 
-            std::cout << "\nOr not?????????\n";
 
             auto cursorId = uassertStatusOK(cursorManager->registerCursor(
                 opCtx, ccc.releaseCursor(), query.nss(), cursorType, cursorLifetime, authUser));
@@ -636,7 +621,6 @@ namespace mongo
                 updateNumHostsTargetedMetrics(opCtx, cm, shardIds.size());
             }
 
-            std::cout << "I returned a cursor ID!!!";
             return cursorId;
             //--------------------------------------------------------------------------
         }

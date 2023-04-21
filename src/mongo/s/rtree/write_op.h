@@ -119,7 +119,6 @@ namespace rtree_index
         				Shard::RetryPolicy::kIdempotent,
                         requests);
 		auto status = responses.front().swResponse.getStatus();
-		std::cout << "Status write op in write_op.h: " << status.toString() << "\n";
 		return status.isOK();
 	}
 }

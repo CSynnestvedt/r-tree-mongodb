@@ -102,20 +102,16 @@ namespace geometry_parser
 		BSONObj coordinateObj = GeometryData["coordinates"].Obj();
 		vector<BSONElement> L;
 		coordinateObj.elems(L);
-		std::cout << "PRinting the L list of coordinates: " << L.data()->toString() << "\n";
 		if (L.size() < 2)
 		{
 			return GEOM_INVALID_NO_ENOUGH_POINT_IN_LINESTRING;
 		}
 		/*new here*/
-		std::cout << "We made it into DataType2LineString with GeometryData: " << GeometryData.toString() << "\n";
 		CoordinateSequence::Ptr cs = csf->instance()->create(L.size(), 2);
 		
-		std::cout << "Nothing wrong with csf \n";
 		for (unsigned int i = 0; i < L.size(); i++)
 		{
 			BSONObj arrobj = L[i].Obj();
-			std::cout << "Logging arrobj: " << arrobj.toString() << "\n";
 			vector<BSONElement> coord;
 			arrobj.elems(coord);
 			if (coord.size() == 2 && coord[0].isNumber() && coord[1].isNumber())
@@ -137,7 +133,6 @@ namespace geometry_parser
 		after the finishing his job out of this functions
 		*/
 		returnLinerString = factory.get()->createLineString(*cs);
-		std::cout << "Printing the returnLinerString: " << returnLinerString->toString() << "\n";
 		return GEOM_PARSE_SUCCESS;
 	}
 
