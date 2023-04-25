@@ -1,0 +1,26 @@
+City, type, percentQueried, centerX, centerY, size,
+Paris, Points, 0.005, 600511, 1128382, 365
+Paris, Points, 0.01, 600511, 1128382, 460
+Paris, Points, 0.015, 600511, 1128382, 560
+Paris, Points, 0.02, 600511, 1128382, 660
+Paris, Points, 0.025, 600511, 1128382, 740
+Paris, Points, 0.03, 600511, 1128382, 800
+Paris, Points, 0.035, 600511, 1128382, 860
+Paris, Points, 0.04, 600511, 1128382, 935
+Paris, Points, 0.045, 600511, 1128382, 1000
+Paris, Points, 0.05, 600511, 1128382, 1065
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+NewYork, LineString, 0.005, 1010956, 198846, 2200
+NewYork, LineString, 0.005, 1010956, 198846, 2800
+NewYork, LineString, 0.005, 1010956, 198846, 3400
+NewYork, LineString, 0.005, 1010956, 198846, 3900
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+NewYork, LineString, 0.005, 1010956, 198846, 1450
+
+
+
+
