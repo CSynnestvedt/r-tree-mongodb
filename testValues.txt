@@ -1,25 +1,105 @@
-City, type, percentQueried, centerX, centerY, size,
+City, type, percentQueried, centerX, centerY, size
+# GeoIntersect
+Paris, Points, 0.005, 600511, 1128382, 370
+Paris, Points, 0.01, 600511, 1128382, 460
+Paris, Points, 0.015, 600511, 1128382, 560
+Paris, Points, 0.02, 600511, 1128382, 660
+Paris, Points, 0.025, 600511, 1128382, 740
+Paris, Points, 0.03, 600511, 1128382, 800
+Paris, Points, 0.035, 600511, 1128382, 870
+Paris, Points, 0.04, 600511, 1128382, 940
+Paris, Points, 0.045, 600511, 1128382, 1010
+Paris, Points, 0.05, 600511, 1128382, 1070
+
+# GeoWithin
 Paris, Points, 0.005, 600511, 1128382, 365
 Paris, Points, 0.01, 600511, 1128382, 460
 Paris, Points, 0.015, 600511, 1128382, 560
 Paris, Points, 0.02, 600511, 1128382, 660
 Paris, Points, 0.025, 600511, 1128382, 740
 Paris, Points, 0.03, 600511, 1128382, 800
-Paris, Points, 0.035, 600511, 1128382, 860
-Paris, Points, 0.04, 600511, 1128382, 935
-Paris, Points, 0.045, 600511, 1128382, 1000
-Paris, Points, 0.05, 600511, 1128382, 1065
-NewYork, LineString, 0.005, 1010956, 198846, 1450
-NewYork, LineString, 0.005, 1010956, 198846, 2200
-NewYork, LineString, 0.005, 1010956, 198846, 2800
-NewYork, LineString, 0.005, 1010956, 198846, 3400
-NewYork, LineString, 0.005, 1010956, 198846, 3900
-NewYork, LineString, 0.005, 1010956, 198846, 1450
-NewYork, LineString, 0.005, 1010956, 198846, 1450
-NewYork, LineString, 0.005, 1010956, 198846, 1450
-NewYork, LineString, 0.005, 1010956, 198846, 1450
-NewYork, LineString, 0.005, 1010956, 198846, 1450
-NewYork, LineString, 0.005, 1010956, 198846, 1450
+Paris, Points, 0.035, 600511, 1128382, 870
+Paris, Points, 0.04, 600511, 1128382, 940
+Paris, Points, 0.045, 600511, 1128382, 1010
+Paris, Points, 0.05, 600511, 1128382, 1070
+
+# GeoIntersect
+NewYork, Linestring, 0.005 997993, 216802, 2000
+NewYork, Linestring, 0.01 997993, 216802, 2750
+NewYork, Linestring, 0.015 997993, 216802, 3250
+NewYork, Linestring, 0.02 997993, 216802, 3700
+NewYork, Linestring, 0.025 997993, 216802, 4125
+NewYork, Linestring, 0.03 997993, 216802, 4500
+NewYork, Linestring, 0.035 997993, 216802, 4825
+NewYork, Linestring, 0.04 997993, 216802, 5150
+NewYork, Linestring, 0.045 997993, 216802, 5450
+NewYork, Linestring, 0.05 997993, 216802, 5725
+
+# Geowithin
+NewYork, Linestring, 0.005 997993, 216802, 2100
+NewYork, Linestring, 0.01 997993, 216802, 2950
+NewYork, Linestring, 0.015 997993, 216802, 3440
+NewYork, Linestring, 0.02 997993, 216802, 3900
+NewYork, Linestring, 0.025 997993, 216802, 4300
+NewYork, Linestring, 0.03 997993, 216802, 4700
+NewYork, Linestring, 0.035 997993, 216802, 5000
+NewYork, Linestring, 0.04 997993, 216802, 5300
+NewYork, Linestring, 0.045 997993, 216802, 5600
+NewYork, Linestring, 0.05 997993, 216802, 5850
+
+# GeoIntersect
+Hongkong, Polygon, 0.005, 834059, 815907, 150
+Hongkong, Polygon, 0.01, 834059, 815907, 210
+Hongkong, Polygon, 0.015, 834059, 815907, 288
+Hongkong, Polygon, 0.02, 834059, 815907, 385
+Hongkong, Polygon, 0.025, 834059, 815907, 450
+Hongkong, Polygon, 0.03, 834059, 815907, 530
+Hongkong, Polygon, 0.035, 834059, 815907, 610
+Hongkong, Polygon, 0.04, 834059, 815907, 675
+Hongkong, Polygon, 0.045, 834059, 815907, 750
+Hongkong, Polygon, 0.05, 834059, 815907, 845
+
+# GeoWithin
+Hongkong, Polygon, 0.005, 834059, 815907, 175
+Hongkong, Polygon, 0.01, 834059, 815907, 240
+Hongkong, Polygon, 0.015, 834059, 815907, 315
+Hongkong, Polygon, 0.02, 834059, 815907, 415
+Hongkong, Polygon, 0.025, 834059, 815907, 483
+Hongkong, Polygon, 0.03, 834059, 815907, 560
+Hongkong, Polygon, 0.035, 834059, 815907, 640
+Hongkong, Polygon, 0.04, 834059, 815907, 705
+Hongkong, Polygon, 0.045, 834059, 815907, 780
+Hongkong, Polygon, 0.05, 834059, 815907, 875
+
+# GeoIntersect
+Barcelona, Polygon, 0,005, 1088575, 770455, 260
+Barcelona, Polygon, 0,01, 1088575, 770455, 375
+Barcelona, Polygon, 0,015, 1088575, 770455, 465
+Barcelona, Polygon, 0,02, 1088575, 770455, 535
+Barcelona, Polygon, 0,025, 1088575, 770455, 600
+Barcelona, Polygon, 0,03, 1088575, 770455, 655
+Barcelona, Polygon, 0,035, 1088575, 770455, 703
+Barcelona, Polygon, 0,04, 1088575, 770455, 740
+Barcelona, Polygon, 0,045, 1088575, 770455, 780
+Barcelona, Polygon, 0,05, 1088575, 770455, 815
+
+# GeoWithin
+Barcelona, Polygon, 0,005, 1088575, 770455, 300
+Barcelona, Polygon, 0,01, 1088575, 770455, 415
+Barcelona, Polygon, 0,015, 1088575, 770455, 500
+Barcelona, Polygon, 0,02, 1088575, 770455, 575
+Barcelona, Polygon, 0,025, 1088575, 770455, 630
+Barcelona, Polygon, 0,03, 1088575, 770455, 680
+Barcelona, Polygon, 0,035, 1088575, 770455, 730
+Barcelona, Polygon, 0,04, 1088575, 770455, 770
+Barcelona, Polygon, 0,045, 1088575, 770455, 805
+Barcelona, Polygon, 0,05, 1088575, 770455, 845
+
+# Coordinate centers
+NewYork, Linestring, 0.005, 997993, 216802
+HongKong, Polygon, 0.005, 815907, 834059 
+Barcelona, Polygon, 0.005, 1088575, 770455
+Paris, Points, 0.005, 600511, 1128382
 
 
 
